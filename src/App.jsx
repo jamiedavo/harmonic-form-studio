@@ -457,7 +457,7 @@ export default function App() {
         </Card>
 
         <div className="order-1 space-y-4 lg:order-2">
-          <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-2 md:p-4 shadow-2xl shadow-black/30">
+          <div className="sticky top-2 z-10 rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-2 md:top-4 md:p-4 shadow-2xl shadow-black/30 lg:static">
             <HarmonicSvg settings={settings} title={title} subtitle={subtitle} />
           </div>
           <div className="grid gap-4 md:grid-cols-3">
