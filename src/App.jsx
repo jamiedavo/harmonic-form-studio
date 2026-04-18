@@ -393,8 +393,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <div className="mx-auto grid max-w-7xl gap-6 p-6 lg:grid-cols-[360px_1fr]">
-        <Card className="border-zinc-800 bg-zinc-900/70 shadow-2xl shadow-black/30 backdrop-blur">
+      <div className="mx-auto grid max-w-7xl gap-6 p-4 md:p-6 lg:grid-cols-[360px_1fr]">
+        <Card className="order-2 border-zinc-800 bg-zinc-900/70 shadow-2xl shadow-black/30 backdrop-blur lg:order-1">
           <CardHeader>
             <CardTitle className="text-xl">Harmonic Form Studio</CardTitle>
             <p className="text-sm text-zinc-400">
@@ -456,8 +456,8 @@ export default function App() {
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
-          <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-4 shadow-2xl shadow-black/30">
+        <div className="order-1 space-y-4 lg:order-2">
+          <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-2 md:p-4 shadow-2xl shadow-black/30">
             <HarmonicSvg settings={settings} title={title} subtitle={subtitle} />
           </div>
           <div className="grid gap-4 md:grid-cols-3">
