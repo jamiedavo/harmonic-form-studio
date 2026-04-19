@@ -1,4 +1,4 @@
- import React, { useMemo, useState } from "react";
+   ort React, { useMemo, useState } from "react";
 // Import your Shadcn components as usual
 
 function HarmonicSvg({ settings }) {
@@ -100,29 +100,4 @@ export default function App() {
         height: '40%', 
         backgroundColor: '#0a0a0a', 
         borderTop: '1px solid #222',
-        overflowY: 'auto',
-        padding: '20px'
-      }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
-          
-          <div className="space-y-2">
-            <label style={{ color: '#666', fontSize: '10px' }}>PRESET</label>
-            <Select value={preset} onValueChange={(k) => { setPreset(k); setSettings(PRESETS[k]); }}>
-              <SelectTrigger className="bg-black border-zinc-800"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Object.keys(PRESETS).map(k => <SelectItem key={k} value={k}>{k}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Control label="Frequency" value={settings.frequency} min={0.5} max={14} step={0.1} onChange={(v) => update("frequency", v)} />
-          <Control label="Amplitude" value={settings.amplitude} min={0.1} max={1.2} step={0.01} onChange={(v) => update("amplitude", v)} />
-          <Control label="Lines" value={settings.lineCount} min={6} max={60} step={1} onChange={(v) => update("lineCount", v)} />
-          
-          {/* Padding bottom so the last slider isn't cut off by the phone's home bar */}
-          <div style={{ height: '40px' }} />
-        </div>
-      </div>
-    </div>
-  );
-}
+        overflowY  
