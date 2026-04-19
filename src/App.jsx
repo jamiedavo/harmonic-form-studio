@@ -146,6 +146,24 @@ const PRESETS = {
   },
 };
 
+const VORTEX_DEFAULTS = {
+  frequency: 8,
+  amplitude: 0.82,
+  lineCount: 36,
+  spread: 0.14,
+  phaseSpread: 1,
+  secondaryMix: 0.25,
+  secondaryFrequency: 13,
+  secondaryPhase: 0.8,
+  symmetry: 0.64,
+  directionBias: 0.04,
+  focalCompression: 0.74,
+  scale: 0.82,
+  yOffset: 0,
+  thickness: 0.95,
+  opacity: 0.7,
+};
+
 function gaussian(x, mu, sigma) {
   const z = (x - mu) / sigma;
   return Math.exp(-0.5 * z * z);
@@ -377,17 +395,20 @@ function Section({ title, description, children }) {
 export default function App() {
   const [preset, setPreset] = useState("interference");
   const [settings, setSettings] = useState(PRESETS.interference);
+  const isVortexMode = settings.mode === "vortex";
 
   const update = (key, value) => setSettings((prev) => ({ ...prev, [key]: value }));
 
   const applyPreset = (key) => {
     setPreset(key);
-    setSettings(PRESETS[key]);
+    const next = PRESETS[key];
+    setSettings(next.mode === "vortex" ? { ...VORTEX_DEFAULTS, ...next } : next);
   };
 
   const changeMode = (mode) => {
     setSettings((prev) => ({
       ...prev,
+      ...(mode === "vortex" ? VORTEX_DEFAULTS : {}),
       mode,
       axisLine: mode === "resonance" || mode === "orbital" ? prev.axisLine : prev.axisLine,
     }));
@@ -486,40 +507,70 @@ export default function App() {
           </div>
         </Section>
 
-        <Section title="Structure" description="These sliders change the logic of the form, not just the amount of motion.">
-          <Control label="Frequency" value={settings.frequency} min={0.5} max={14} step={0.1} onChange={(v) => update("frequency", v)} />
-          <Control label="Amplitude" value={settings.amplitude} min={0.1} max={1.2} step={0.01} onChange={(v) => update("amplitude", v)} />
-          <Control label="Symmetry" value={settings.symmetry} min={0} max={1} step={0.01} onChange={(v) => update("symmetry", v)} />
-          <Control label="Direction Bias" value={settings.directionBias} min={-1} max={1} step={0.01} onChange={(v) => update("directionBias", v)} />
-          <Control label="Focal Compression" value={settings.focalCompression} min={0} max={1} step={0.01} onChange={(v) => update("focalCompression", v)} />
-          {settings.mode === "decay" && (
-            <Control label="Damping" value={settings.damping} min={0.2} max={5} step={0.01} onChange={(v) => update("damping", v)} />
-          )}
-          <Control label="Secondary Mix" value={settings.secondaryMix} min={0} max={1} step={0.01} onChange={(v) => update("secondaryMix", v)} />
-          <Control label="Secondary Frequency" value={settings.secondaryFrequency} min={0.5} max={18} step={0.1} onChange={(v) => update("secondaryFrequency", v)} />
-          <Control label="Secondary Phase" value={settings.secondaryPhase} min={0} max={6.28} step={0.01} onChange={(v) => update("secondaryPhase", v)} />
-        </Section>
+        {!isVortexMode ? (
+          <>
+            <Section title="Structure" description="These sliders change the logic of the form, not just the amount of motion.">
+              <Control label="Frequency" value={settings.frequency} min={0.5} max={14} step={0.1} onChange={(v) => update("frequency", v)} />
+              <Control label="Amplitude" value={settings.amplitude} min={0.1} max={1.2} step={0.01} onChange={(v) => update("amplitude", v)} />
+              <Control label="Symmetry" value={settings.symmetry} min={0} max={1} step={0.01} onChange={(v) => update("symmetry", v)} />
+              <Control label="Direction Bias" value={settings.directionBias} min={-1} max={1} step={0.01} onChange={(v) => update("directionBias", v)} />
+              <Control label="Focal Compression" value={settings.focalCompression} min={0} max={1} step={0.01} onChange={(v) => update("focalCompression", v)} />
+              {settings.mode === "decay" && (
+                <Control label="Damping" value={settings.damping} min={0.2} max={5} step={0.01} onChange={(v) => update("damping", v)} />
+              )}
+              <Control label="Secondary Mix" value={settings.secondaryMix} min={0} max={1} step={0.01} onChange={(v) => update("secondaryMix", v)} />
+              <Control label="Secondary Frequency" value={settings.secondaryFrequency} min={0.5} max={18} step={0.1} onChange={(v) => update("secondaryFrequency", v)} />
+              <Control label="Secondary Phase" value={settings.secondaryPhase} min={0} max={6.28} step={0.01} onChange={(v) => update("secondaryPhase", v)} />
+            </Section>
 
-        <Section title="Lines" description="Shape the trace density and the amount of woven separation between lines.">
-          <Control label="Line Count" value={settings.lineCount} min={6} max={60} step={1} onChange={(v) => update("lineCount", Math.round(v))} />
-          <Control label="Line Spread" value={settings.spread} min={0} max={0.5} step={0.01} onChange={(v) => update("spread", v)} />
-          <Control label="Phase Spread" value={settings.phaseSpread} min={0} max={3} step={0.01} onChange={(v) => update("phaseSpread", v)} />
-          <Control label="Stroke Weight" value={settings.thickness} min={0.4} max={2.2} step={0.01} onChange={(v) => update("thickness", v)} />
-          <Control label="Opacity" value={settings.opacity} min={0.1} max={1} step={0.01} onChange={(v) => update("opacity", v)} />
-        </Section>
+            <Section title="Lines" description="Shape the trace density and the amount of woven separation between lines.">
+              <Control label="Line Count" value={settings.lineCount} min={6} max={60} step={1} onChange={(v) => update("lineCount", Math.round(v))} />
+              <Control label="Line Spread" value={settings.spread} min={0} max={0.5} step={0.01} onChange={(v) => update("spread", v)} />
+              <Control label="Phase Spread" value={settings.phaseSpread} min={0} max={3} step={0.01} onChange={(v) => update("phaseSpread", v)} />
+              <Control label="Stroke Weight" value={settings.thickness} min={0.4} max={2.2} step={0.01} onChange={(v) => update("thickness", v)} />
+              <Control label="Opacity" value={settings.opacity} min={0.1} max={1} step={0.01} onChange={(v) => update("opacity", v)} />
+            </Section>
 
-        <Section title="Composition" description="Control how the form sits on the poster and how much space it leaves to breathe.">
-          <Control label="Scale" value={settings.scale} min={0.45} max={1.1} step={0.01} onChange={(v) => update("scale", v)} />
-          <Control label="Vertical Offset" value={settings.yOffset} min={-1} max={1} step={0.01} onChange={(v) => update("yOffset", v)} />
-          <Control label="Horizontal Padding" value={settings.xPadding} min={0.01} max={0.2} step={0.005} onChange={(v) => update("xPadding", v)} />
-        </Section>
+            <Section title="Composition" description="Control how the form sits on the poster and how much space it leaves to breathe.">
+              <Control label="Scale" value={settings.scale} min={0.45} max={1.1} step={0.01} onChange={(v) => update("scale", v)} />
+              <Control label="Vertical Offset" value={settings.yOffset} min={-1} max={1} step={0.01} onChange={(v) => update("yOffset", v)} />
+              <Control label="Horizontal Padding" value={settings.xPadding} min={0.01} max={0.2} step={0.005} onChange={(v) => update("xPadding", v)} />
+            </Section>
 
-        <Section title="Display" description="Keep the axis line only where it helps the poster feel more structural and intentional.">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="axis" className="text-zinc-200">Axis Line</Label>
-            <Switch id="axis" checked={settings.axisLine} onCheckedChange={(v) => update("axisLine", v)} />
-          </div>
-        </Section>
+            <Section title="Display" description="Keep the axis line only where it helps the poster feel more structural and intentional.">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="axis" className="text-zinc-200">Axis Line</Label>
+                <Switch id="axis" checked={settings.axisLine} onCheckedChange={(v) => update("axisLine", v)} />
+              </div>
+            </Section>
+          </>
+        ) : (
+          <>
+            <Section title="Spiral Geometry" description="Dedicated controls for the vortex path so it can evolve independently from waveform forms.">
+              <Control label="Spiral Turns" value={settings.frequency} min={1.5} max={18} step={0.1} onChange={(v) => update("frequency", v)} />
+              <Control label="Vertical Stretch" value={settings.amplitude} min={0.2} max={1.2} step={0.01} onChange={(v) => update("amplitude", v)} />
+              <Control label="Center Drift" value={settings.directionBias} min={-1} max={1} step={0.01} onChange={(v) => update("directionBias", v)} />
+              <Control label="Radial Focus" value={settings.focalCompression} min={0} max={1} step={0.01} onChange={(v) => update("focalCompression", v)} />
+              <Control label="Vertical Symmetry" value={settings.symmetry} min={0} max={1} step={0.01} onChange={(v) => update("symmetry", v)} />
+            </Section>
+
+            <Section title="Spiral Traces" description="Tune arm count, separation, and turbulence without borrowing waveform-only terminology.">
+              <Control label="Trace Count" value={settings.lineCount} min={8} max={70} step={1} onChange={(v) => update("lineCount", Math.round(v))} />
+              <Control label="Ring Spread" value={settings.spread} min={0} max={0.45} step={0.01} onChange={(v) => update("spread", v)} />
+              <Control label="Arm Separation" value={settings.phaseSpread} min={0} max={2.4} step={0.01} onChange={(v) => update("phaseSpread", v)} />
+              <Control label="Turbulence" value={settings.secondaryMix} min={0} max={1} step={0.01} onChange={(v) => update("secondaryMix", v)} />
+              <Control label="Turbulence Frequency" value={settings.secondaryFrequency} min={0.5} max={24} step={0.1} onChange={(v) => update("secondaryFrequency", v)} />
+              <Control label="Turbulence Phase" value={settings.secondaryPhase} min={0} max={6.28} step={0.01} onChange={(v) => update("secondaryPhase", v)} />
+            </Section>
+
+            <Section title="Spiral Composition" description="Poster framing controls tuned for radial forms.">
+              <Control label="Spiral Scale" value={settings.scale} min={0.45} max={1.1} step={0.01} onChange={(v) => update("scale", v)} />
+              <Control label="Vertical Offset" value={settings.yOffset} min={-1} max={1} step={0.01} onChange={(v) => update("yOffset", v)} />
+              <Control label="Stroke Weight" value={settings.thickness} min={0.4} max={2.2} step={0.01} onChange={(v) => update("thickness", v)} />
+              <Control label="Opacity" value={settings.opacity} min={0.1} max={1} step={0.01} onChange={(v) => update("opacity", v)} />
+            </Section>
+          </>
+        )}
 
         <div className="flex gap-3">
           <Button className="flex-1 rounded-2xl" onClick={() => applyPreset(preset)}>
