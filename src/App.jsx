@@ -124,26 +124,63 @@ const PRESETS = {
   },
   vortex: {
     mode: "vortex",
-    frequency: 8,
-    amplitude: 0.82,
-    lineCount: 36,
-    spread: 0.14,
-    phaseSpread: 1,
-    damping: 0,
-    secondaryMix: 0.25,
-    secondaryFrequency: 13,
-    secondaryPhase: 0.8,
-    symmetry: 0.64,
-    directionBias: 0.04,
-    focalCompression: 0.74,
+    spiralTurns: 9.2,
+    spiralGrowth: 2.9,
+    centerPull: 0.82,
+    innerVoid: 0.04,
+    ellipse: 0.14,
+    angularOffset: 0.36,
+    radialLineCount: 40,
+    densityBias: "center",
+    radialSpread: 0.24,
+    rotation: 0.22,
     axisLine: false,
     endpoints: false,
-    thickness: 0.95,
-    opacity: 0.7,
-    scale: 0.82,
+    thickness: 0.84,
+    opacity: 0.72,
+    scale: 0.78,
     yOffset: 0,
-    xPadding: 0.12,
   },
+};
+
+const SPIRAL_PROFILES = {
+  vortex: { ...PRESETS.vortex },
+  open: {
+    spiralTurns: 4.8,
+    spiralGrowth: 1.35,
+    centerPull: 0.3,
+    innerVoid: 0.22,
+    ellipse: 0.18,
+    angularOffset: 0.22,
+    radialLineCount: 22,
+    densityBias: "even",
+    radialSpread: 0.12,
+    rotation: 0.08,
+    thickness: 0.92,
+    opacity: 0.64,
+    scale: 0.86,
+    yOffset: 0,
+  },
+  shell: {
+    spiralTurns: 6.6,
+    spiralGrowth: 1.8,
+    centerPull: 0.44,
+    innerVoid: 0.12,
+    ellipse: 0.28,
+    angularOffset: 0.28,
+    radialLineCount: 30,
+    densityBias: "outer",
+    radialSpread: 0.18,
+    rotation: 0.14,
+    thickness: 0.88,
+    opacity: 0.7,
+    scale: 0.84,
+    yOffset: 0,
+  },
+};
+
+const VORTEX_DEFAULTS = {
+  ...PRESETS.vortex,
 };
 
 function gaussian(x, mu, sigma) {
@@ -211,11 +248,6 @@ function buildWavePath(settings, lineIndex, width, height) {
       const fold = Math.sin(u * secondaryFrequency * 0.25 + secondaryPhase);
       const ribbon = Math.sin(u * frequency + phaseOffset) * 0.45;
       yNorm = (orbit * fold + ribbon * secondaryMix) * ampOffset * lerp(1, focusBoost, 0.4);
-    } else if (mode === "vortex") {
-      const radialEnv = Math.sin(Math.PI * structuralT) ** lerp(1.2, 0.85, symmetry);
-      const spiral = Math.sin(frequency * u + phaseOffset + t * TAU * (0.65 + focalCompression * 0.35));
-      const turbulence = secondaryMix * 0.4 * Math.sin(secondaryFrequency * u - phaseOffset * 0.5);
-      yNorm = radialEnv * (spiral + turbulence) * ampOffset * focusBoost;
     }
 
     const y = centerY - yNorm * ampPx;
@@ -260,35 +292,51 @@ function buildOrbitalPath(settings, lineIndex, width, height) {
   return d;
 }
 
-function buildVortexPath(settings, lineIndex, width, height) {
+function buildSpiralPath(settings, lineIndex, width, height) {
   const {
-    frequency, amplitude, lineCount, spread, phaseSpread,
-    secondaryMix, secondaryFrequency, secondaryPhase,
-    symmetry, directionBias, focalCompression,
+    spiralTurns, spiralGrowth, centerPull, innerVoid,
+    ellipse, angularOffset, radialLineCount, densityBias,
+    radialSpread, rotation,
     scale, yOffset,
   } = settings;
 
-  const cx = width / 2 + directionBias * width * 0.06;
-  const cy = height / 2 + yOffset * height * 0.25;
-  const maxR = Math.min(width, height) * 0.29 * scale;
-  const mid = (lineCount - 1) / 2;
-  const norm = lineCount <= 1 ? 0 : (lineIndex - mid) / mid;
-  const phaseOffset = norm * phaseSpread;
-  const radiusBias = 1 + norm * spread * 0.8;
-  const radiusCurve = lerp(1, 0.68, focalCompression);
+  const cx = width / 2;
+  const cy = height / 2 + yOffset * height * 0.24;
+  const maxR = Math.min(width, height) * 0.42 * scale;
+  const mid = (radialLineCount - 1) / 2;
+  const norm = radialLineCount <= 1 ? 0 : (lineIndex - mid) / mid;
+  const lineScale = 1 + norm * radialSpread;
+  const lineRotation = norm * angularOffset * TAU + rotation;
+  const yScale = lerp(1, 0.54, ellipse);
+
+  const densityMap = (t) => {
+    if (densityBias === "center") return t ** 1.75;
+    if (densityBias === "outer") return t ** 0.68;
+    return t;
+  };
+
+  const growthBase = Math.max(-0.95, spiralGrowth);
+  const growthCurve = (t) => {
+    if (Math.abs(growthBase) < 0.001) return t;
+    if (growthBase > 0) {
+      return (Math.exp(growthBase * t) - 1) / (Math.exp(growthBase) - 1);
+    }
+    const k = Math.abs(growthBase);
+    return 1 - ((Math.exp(k * (1 - t)) - 1) / (Math.exp(k) - 1));
+  };
 
   let d = "";
   const steps = 1100;
   for (let i = 0; i <= steps; i += 1) {
     const t = i / steps;
-    const easedT = t ** radiusCurve;
-    const angle = easedT * TAU * (2.4 + frequency * 0.22) + phaseOffset;
-    const turbulence = 0.9 + 0.14 * Math.sin(secondaryFrequency * angle + secondaryPhase) * secondaryMix;
-    const asymmetry = 1 + directionBias * 0.12 * Math.cos(angle);
-    const verticalSqueeze = lerp(1, 0.78, 1 - symmetry);
-    const radius = maxR * easedT * radiusBias * turbulence * asymmetry;
+    const densityT = densityMap(t);
+    const grownT = growthCurve(densityT);
+    const pulledT = grownT ** lerp(0.72, 2.45, centerPull);
+    const coreRadius = innerVoid * maxR;
+    const radius = (coreRadius + (maxR - coreRadius) * pulledT) * lineScale;
+    const angle = grownT * spiralTurns * TAU + lineRotation;
     const x = cx + radius * Math.cos(angle);
-    const y = cy + radius * Math.sin(angle) * amplitude * verticalSqueeze;
+    const y = cy + radius * Math.sin(angle) * yScale;
     d += i === 0 ? `M ${x.toFixed(2)} ${y.toFixed(2)}` : ` L ${x.toFixed(2)} ${y.toFixed(2)}`;
   }
   return d;
@@ -300,12 +348,13 @@ function HarmonicSvg({ settings }) {
 
   const paths = useMemo(() => {
     const list = [];
-    for (let i = 0; i < settings.lineCount; i += 1) {
+    const totalLines = settings.mode === "vortex" ? settings.radialLineCount : settings.lineCount;
+    for (let i = 0; i < totalLines; i += 1) {
       let d;
       if (settings.mode === "orbital") {
         d = buildOrbitalPath(settings, i, width, height);
       } else if (settings.mode === "vortex") {
-        d = buildVortexPath(settings, i, width, height);
+        d = buildSpiralPath(settings, i, width, height);
       } else {
         d = buildWavePath(settings, i, width, height);
       }
@@ -377,19 +426,52 @@ function Section({ title, description, children }) {
 export default function App() {
   const [preset, setPreset] = useState("interference");
   const [settings, setSettings] = useState(PRESETS.interference);
+  const [spiralProfile, setSpiralProfile] = useState("vortex");
+  const isVortexMode = settings.mode === "vortex";
 
   const update = (key, value) => setSettings((prev) => ({ ...prev, [key]: value }));
 
   const applyPreset = (key) => {
     setPreset(key);
-    setSettings(PRESETS[key]);
+    const next = PRESETS[key];
+    if (next.mode === "vortex") {
+      setSpiralProfile("vortex");
+      setSettings({ ...VORTEX_DEFAULTS, ...next, ...SPIRAL_PROFILES.vortex });
+      return;
+    }
+    setSettings(next);
   };
 
   const changeMode = (mode) => {
+    if (mode === "vortex") {
+      setSpiralProfile("vortex");
+    }
+    setSettings((prev) => {
+      if (mode === "vortex") {
+        return {
+          ...prev,
+          ...VORTEX_DEFAULTS,
+          ...SPIRAL_PROFILES.vortex,
+          mode: "vortex",
+        };
+      }
+
+      return {
+        ...PRESETS[mode],
+        ...prev,
+        mode,
+        xPadding: prev.xPadding ?? PRESETS[mode].xPadding,
+      };
+    });
+  };
+
+  const applySpiralProfile = (profileKey) => {
+    setSpiralProfile(profileKey);
     setSettings((prev) => ({
       ...prev,
-      mode,
-      axisLine: mode === "resonance" || mode === "orbital" ? prev.axisLine : prev.axisLine,
+      ...VORTEX_DEFAULTS,
+      ...SPIRAL_PROFILES[profileKey],
+      mode: "vortex",
     }));
   };
 
@@ -484,42 +566,99 @@ export default function App() {
               </SelectContent>
             </Select>
           </div>
-        </Section>
 
-        <Section title="Structure" description="These sliders change the logic of the form, not just the amount of motion.">
-          <Control label="Frequency" value={settings.frequency} min={0.5} max={14} step={0.1} onChange={(v) => update("frequency", v)} />
-          <Control label="Amplitude" value={settings.amplitude} min={0.1} max={1.2} step={0.01} onChange={(v) => update("amplitude", v)} />
-          <Control label="Symmetry" value={settings.symmetry} min={0} max={1} step={0.01} onChange={(v) => update("symmetry", v)} />
-          <Control label="Direction Bias" value={settings.directionBias} min={-1} max={1} step={0.01} onChange={(v) => update("directionBias", v)} />
-          <Control label="Focal Compression" value={settings.focalCompression} min={0} max={1} step={0.01} onChange={(v) => update("focalCompression", v)} />
-          {settings.mode === "decay" && (
-            <Control label="Damping" value={settings.damping} min={0.2} max={5} step={0.01} onChange={(v) => update("damping", v)} />
+          {isVortexMode && (
+            <div className="space-y-2">
+              <Label>Spiral Recipe</Label>
+              <Select value={spiralProfile} onValueChange={applySpiralProfile}>
+                <SelectTrigger className="border-zinc-800 bg-zinc-950">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vortex">Vortex Spiral</SelectItem>
+                  <SelectItem value="open">Open Spiral</SelectItem>
+                  <SelectItem value="shell">Shell Spiral</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           )}
-          <Control label="Secondary Mix" value={settings.secondaryMix} min={0} max={1} step={0.01} onChange={(v) => update("secondaryMix", v)} />
-          <Control label="Secondary Frequency" value={settings.secondaryFrequency} min={0.5} max={18} step={0.1} onChange={(v) => update("secondaryFrequency", v)} />
-          <Control label="Secondary Phase" value={settings.secondaryPhase} min={0} max={6.28} step={0.01} onChange={(v) => update("secondaryPhase", v)} />
         </Section>
 
-        <Section title="Lines" description="Shape the trace density and the amount of woven separation between lines.">
-          <Control label="Line Count" value={settings.lineCount} min={6} max={60} step={1} onChange={(v) => update("lineCount", Math.round(v))} />
-          <Control label="Line Spread" value={settings.spread} min={0} max={0.5} step={0.01} onChange={(v) => update("spread", v)} />
-          <Control label="Phase Spread" value={settings.phaseSpread} min={0} max={3} step={0.01} onChange={(v) => update("phaseSpread", v)} />
-          <Control label="Stroke Weight" value={settings.thickness} min={0.4} max={2.2} step={0.01} onChange={(v) => update("thickness", v)} />
-          <Control label="Opacity" value={settings.opacity} min={0.1} max={1} step={0.01} onChange={(v) => update("opacity", v)} />
-        </Section>
+        {!isVortexMode ? (
+          <>
+            <Section title="Structure" description="These sliders change the logic of the form, not just the amount of motion.">
+              <Control label="Frequency" value={settings.frequency} min={0.5} max={14} step={0.1} onChange={(v) => update("frequency", v)} />
+              <Control label="Amplitude" value={settings.amplitude} min={0.1} max={1.2} step={0.01} onChange={(v) => update("amplitude", v)} />
+              <Control label="Symmetry" value={settings.symmetry} min={0} max={1} step={0.01} onChange={(v) => update("symmetry", v)} />
+              <Control label="Direction Bias" value={settings.directionBias} min={-1} max={1} step={0.01} onChange={(v) => update("directionBias", v)} />
+              <Control label="Focal Compression" value={settings.focalCompression} min={0} max={1} step={0.01} onChange={(v) => update("focalCompression", v)} />
+              {settings.mode === "decay" && (
+                <Control label="Damping" value={settings.damping} min={0.2} max={5} step={0.01} onChange={(v) => update("damping", v)} />
+              )}
+              <Control label="Secondary Mix" value={settings.secondaryMix} min={0} max={1} step={0.01} onChange={(v) => update("secondaryMix", v)} />
+              <Control label="Secondary Frequency" value={settings.secondaryFrequency} min={0.5} max={18} step={0.1} onChange={(v) => update("secondaryFrequency", v)} />
+              <Control label="Secondary Phase" value={settings.secondaryPhase} min={0} max={6.28} step={0.01} onChange={(v) => update("secondaryPhase", v)} />
+            </Section>
 
-        <Section title="Composition" description="Control how the form sits on the poster and how much space it leaves to breathe.">
-          <Control label="Scale" value={settings.scale} min={0.45} max={1.1} step={0.01} onChange={(v) => update("scale", v)} />
-          <Control label="Vertical Offset" value={settings.yOffset} min={-1} max={1} step={0.01} onChange={(v) => update("yOffset", v)} />
-          <Control label="Horizontal Padding" value={settings.xPadding} min={0.01} max={0.2} step={0.005} onChange={(v) => update("xPadding", v)} />
-        </Section>
+            <Section title="Lines" description="Shape the trace density and the amount of woven separation between lines.">
+              <Control label="Line Count" value={settings.lineCount} min={6} max={60} step={1} onChange={(v) => update("lineCount", Math.round(v))} />
+              <Control label="Line Spread" value={settings.spread} min={0} max={0.5} step={0.01} onChange={(v) => update("spread", v)} />
+              <Control label="Phase Spread" value={settings.phaseSpread} min={0} max={3} step={0.01} onChange={(v) => update("phaseSpread", v)} />
+              <Control label="Stroke Weight" value={settings.thickness} min={0.4} max={2.2} step={0.01} onChange={(v) => update("thickness", v)} />
+              <Control label="Opacity" value={settings.opacity} min={0.1} max={1} step={0.01} onChange={(v) => update("opacity", v)} />
+            </Section>
 
-        <Section title="Display" description="Keep the axis line only where it helps the poster feel more structural and intentional.">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="axis" className="text-zinc-200">Axis Line</Label>
-            <Switch id="axis" checked={settings.axisLine} onCheckedChange={(v) => update("axisLine", v)} />
-          </div>
-        </Section>
+            <Section title="Composition" description="Control how the form sits on the poster and how much space it leaves to breathe.">
+              <Control label="Scale" value={settings.scale} min={0.45} max={1.1} step={0.01} onChange={(v) => update("scale", v)} />
+              <Control label="Vertical Offset" value={settings.yOffset} min={-1} max={1} step={0.01} onChange={(v) => update("yOffset", v)} />
+              <Control label="Horizontal Padding" value={settings.xPadding} min={0.01} max={0.2} step={0.005} onChange={(v) => update("xPadding", v)} />
+            </Section>
+
+            <Section title="Display" description="Keep the axis line only where it helps the poster feel more structural and intentional.">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="axis" className="text-zinc-200">Axis Line</Label>
+                <Switch id="axis" checked={settings.axisLine} onCheckedChange={(v) => update("axisLine", v)} />
+              </div>
+            </Section>
+          </>
+        ) : (
+          <>
+            <Section title="Spiral Structure" description="A dedicated radial geometry system driven by turns, growth, center tension, and ellipse shaping.">
+              <Control label="Spiral Turns" value={settings.spiralTurns} min={1.5} max={14} step={0.1} onChange={(v) => update("spiralTurns", v)} />
+              <Control label="Spiral Growth" value={settings.spiralGrowth} min={-0.8} max={3.6} step={0.01} onChange={(v) => update("spiralGrowth", v)} />
+              <Control label="Centre Pull" value={settings.centerPull} min={0} max={1} step={0.01} onChange={(v) => update("centerPull", v)} />
+              <Control label="Inner Void" value={settings.innerVoid} min={0} max={0.55} step={0.01} onChange={(v) => update("innerVoid", v)} />
+              <Control label="Ellipse" value={settings.ellipse} min={0} max={1} step={0.01} onChange={(v) => update("ellipse", v)} />
+            </Section>
+
+            <Section title="Spiral Density" description="Control trace layering and where density concentrates to keep the silhouette clean instead of muddy.">
+              <Control label="Angular Offset" value={settings.angularOffset} min={0} max={0.9} step={0.01} onChange={(v) => update("angularOffset", v)} />
+              <Control label="Radial Line Count" value={settings.radialLineCount} min={8} max={72} step={1} onChange={(v) => update("radialLineCount", Math.round(v))} />
+              <Control label="Radial Spread" value={settings.radialSpread} min={0} max={0.4} step={0.01} onChange={(v) => update("radialSpread", v)} />
+              <div className="space-y-2">
+                <Label>Density Bias</Label>
+                <Select value={settings.densityBias} onValueChange={(v) => update("densityBias", v)}>
+                  <SelectTrigger className="border-zinc-800 bg-zinc-950">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="center">Center</SelectItem>
+                    <SelectItem value="even">Even</SelectItem>
+                    <SelectItem value="outer">Outer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </Section>
+
+            <Section title="Spiral Composition" description="Position and polish the spiral for restrained premium poster studies.">
+              <Control label="Rotation" value={settings.rotation} min={0} max={6.28} step={0.01} onChange={(v) => update("rotation", v)} />
+              <Control label="Spiral Scale" value={settings.scale} min={0.45} max={1.1} step={0.01} onChange={(v) => update("scale", v)} />
+              <Control label="Vertical Offset" value={settings.yOffset} min={-1} max={1} step={0.01} onChange={(v) => update("yOffset", v)} />
+              <Control label="Stroke Weight" value={settings.thickness} min={0.35} max={1.6} step={0.01} onChange={(v) => update("thickness", v)} />
+              <Control label="Opacity" value={settings.opacity} min={0.2} max={0.95} step={0.01} onChange={(v) => update("opacity", v)} />
+            </Section>
+          </>
+        )}
 
         <div className="flex gap-3">
           <Button className="flex-1 rounded-2xl" onClick={() => applyPreset(preset)}>
