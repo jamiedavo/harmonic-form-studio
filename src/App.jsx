@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -182,6 +182,110 @@ const SPIRAL_PROFILES = {
 const VORTEX_DEFAULTS = {
   ...PRESETS.vortex,
 };
+
+const PRESET_LIBRARY = [
+  { id: "harmonic-resonance-peak", name: "Resonance Peak", category: "Harmonic Studies", settings: { ...PRESETS.resonance } },
+  { id: "harmonic-standing-chamber", name: "Standing Chamber", category: "Harmonic Studies", settings: { ...PRESETS.standing, symmetry: 0.98, phaseSpread: 0.48, lineCount: 24, opacity: 0.7 } },
+  { id: "harmonic-interference-core", name: "Interference Core", category: "Harmonic Studies", settings: { ...PRESETS.interference } },
+  { id: "wave-decay-cascade", name: "Decay Cascade", category: "Wave Studies", settings: { ...PRESETS.decay, damping: 3.8, directionBias: -0.4, lineCount: 34 } },
+  { id: "wave-standing-quiet", name: "Standing Quiet", category: "Wave Studies", settings: { ...PRESETS.standing, amplitude: 0.58, phaseSpread: 0.42, symmetry: 0.95 } },
+  { id: "wave-interference-ribbon", name: "Interference Ribbon", category: "Wave Studies", settings: { ...PRESETS.interference, secondaryMix: 0.58, lineCount: 30, focalCompression: 0.34 } },
+  { id: "spiral-vortex-study", name: "Vortex Spiral", category: "Spiral Studies", settings: { ...VORTEX_DEFAULTS, ...SPIRAL_PROFILES.vortex, mode: "vortex" } },
+  { id: "spiral-open-study", name: "Open Spiral", category: "Spiral Studies", settings: { ...VORTEX_DEFAULTS, ...SPIRAL_PROFILES.open, mode: "vortex" } },
+  { id: "spiral-shell-study", name: "Shell Spiral", category: "Spiral Studies", settings: { ...VORTEX_DEFAULTS, ...SPIRAL_PROFILES.shell, mode: "vortex" } },
+  { id: "orbital-ribbon-loop", name: "Ribbon Loop", category: "Orbital Studies", settings: { ...PRESETS.orbital } },
+  { id: "orbital-tidal-echo", name: "Tidal Echo", category: "Orbital Studies", settings: { ...PRESETS.orbital, frequency: 3.1, secondaryMix: 0.62, spread: 0.24, scale: 0.8 } },
+  { id: "orbital-crown-arc", name: "Crown Arc", category: "Orbital Studies", settings: { ...PRESETS.orbital, symmetry: 0.74, phaseSpread: 1.45, lineCount: 36, opacity: 0.78 } },
+];
+
+const PRESET_BY_ID = Object.fromEntries(PRESET_LIBRARY.map((p) => [p.id, p]));
+const PRESET_CATEGORIES = [...new Set(PRESET_LIBRARY.map((p) => p.category))];
+const CUSTOM_PRESETS_KEY = "harmonic-form-studio.custom-presets";
+
+const MODE_BOUNDS = {
+  decay: {
+    frequency: [2, 10], amplitude: [0.35, 1], lineCount: [18, 44], spread: [0.05, 0.28], phaseSpread: [0.2, 1.6],
+    damping: [1.2, 4.5], secondaryMix: [0.06, 0.45], secondaryFrequency: [3.5, 13], secondaryPhase: [0, TAU],
+    symmetry: [0.08, 0.65], directionBias: [-0.75, 0.25], focalCompression: [0.12, 0.7], thickness: [0.75, 1.3],
+    opacity: [0.62, 0.86], scale: [0.74, 0.98], yOffset: [-0.22, 0.22], xPadding: [0.03, 0.12],
+  },
+  standing: {
+    frequency: [1.1, 6], amplitude: [0.35, 0.9], lineCount: [16, 42], spread: [0.03, 0.26], phaseSpread: [0.1, 1.4],
+    secondaryMix: [0.02, 0.34], secondaryFrequency: [2, 9], secondaryPhase: [0, TAU], symmetry: [0.72, 1],
+    directionBias: [-0.25, 0.25], focalCompression: [0.08, 0.56], thickness: [0.75, 1.2], opacity: [0.62, 0.84],
+    scale: [0.74, 0.98], yOffset: [-0.2, 0.2], xPadding: [0.03, 0.12],
+  },
+  interference: {
+    frequency: [2, 8], amplitude: [0.3, 0.92], lineCount: [16, 44], spread: [0.06, 0.32], phaseSpread: [0.4, 2.2],
+    secondaryMix: [0.2, 0.86], secondaryFrequency: [3, 12], secondaryPhase: [0, TAU], symmetry: [0.34, 0.94],
+    directionBias: [-0.25, 0.3], focalCompression: [0.16, 0.72], thickness: [0.72, 1.3], opacity: [0.6, 0.84],
+    scale: [0.72, 0.98], yOffset: [-0.26, 0.26], xPadding: [0.03, 0.13],
+  },
+  resonance: {
+    frequency: [3.5, 11], amplitude: [0.45, 1.08], lineCount: [24, 46], spread: [0.06, 0.24], phaseSpread: [0.4, 1.8],
+    secondaryMix: [0.14, 0.65], secondaryFrequency: [4, 14], secondaryPhase: [0, TAU], symmetry: [0.58, 1],
+    directionBias: [-0.22, 0.32], focalCompression: [0.3, 0.9], thickness: [0.8, 1.35], opacity: [0.66, 0.9],
+    scale: [0.76, 1], yOffset: [-0.2, 0.2], xPadding: [0.02, 0.1],
+  },
+  orbital: {
+    frequency: [1.6, 4.8], amplitude: [0.4, 0.95], lineCount: [18, 44], spread: [0.06, 0.28], phaseSpread: [0.5, 1.9],
+    secondaryMix: [0.2, 0.76], secondaryFrequency: [2, 7], secondaryPhase: [0, TAU], symmetry: [0.26, 0.86],
+    directionBias: [-0.2, 0.34], focalCompression: [0.16, 0.72], thickness: [0.74, 1.24], opacity: [0.58, 0.84],
+    scale: [0.64, 0.94], yOffset: [-0.24, 0.24], xPadding: [0.08, 0.18],
+  },
+  vortex: {
+    spiralTurns: [3.6, 11.5], spiralGrowth: [0.1, 3.2], centerPull: [0.12, 0.92], innerVoid: [0.02, 0.35],
+    ellipse: [0, 0.7], angularOffset: [0.08, 0.58], radialLineCount: [14, 56], radialSpread: [0.06, 0.3],
+    rotation: [0, TAU], thickness: [0.5, 1.2], opacity: [0.5, 0.86], scale: [0.62, 0.95], yOffset: [-0.22, 0.22],
+  },
+};
+
+const randomBetween = (min, max) => min + Math.random() * (max - min);
+const randomChoice = (items) => items[Math.floor(Math.random() * items.length)];
+
+function coerceByExample(value, example) {
+  if (typeof example === "number") {
+    if (Number.isInteger(example)) return Math.round(value);
+    return Number(value.toFixed(4));
+  }
+  return value;
+}
+
+function buildRandomSettings(mode, seed = {}, intensity = 1) {
+  const base = mode === "vortex" ? { ...VORTEX_DEFAULTS } : { ...PRESETS[mode] };
+  const bounds = MODE_BOUNDS[mode];
+  const next = { ...base, ...seed, mode };
+
+  Object.entries(bounds).forEach(([key, [min, max]]) => {
+    const mid = (min + max) / 2;
+    const half = ((max - min) / 2) * intensity;
+    const low = clamp(mid - half, min, max);
+    const high = clamp(mid + half, min, max);
+    const sample = randomBetween(low, high);
+    next[key] = coerceByExample(sample, base[key] ?? sample);
+  });
+
+  if (mode === "vortex") {
+    next.densityBias = randomChoice(["center", "even", "outer"]);
+    next.axisLine = false;
+  }
+  return next;
+}
+
+function mutateSettings(settings, amount = 0.2) {
+  const bounds = MODE_BOUNDS[settings.mode];
+  const next = { ...settings };
+  Object.entries(bounds).forEach(([key, [min, max]]) => {
+    const current = settings[key];
+    const jitter = (max - min) * amount * (Math.random() - 0.5);
+    const value = clamp((current ?? (min + max) / 2) + jitter, min, max);
+    next[key] = coerceByExample(value, current ?? value);
+  });
+  if (settings.mode === "vortex" && Math.random() < amount * 0.9) {
+    next.densityBias = randomChoice(["center", "even", "outer"]);
+  }
+  return next;
+}
 
 function gaussian(x, mu, sigma) {
   const z = (x - mu) / sigma;
@@ -424,19 +528,29 @@ function Section({ title, description, children }) {
 }
 
 export default function App() {
-  const [preset, setPreset] = useState("interference");
-  const [settings, setSettings] = useState(PRESETS.interference);
+  const [presetCategory, setPresetCategory] = useState("Harmonic Studies");
+  const [preset, setPreset] = useState("harmonic-interference-core");
+  const [settings, setSettings] = useState({ ...PRESET_BY_ID["harmonic-interference-core"].settings });
   const [spiralProfile, setSpiralProfile] = useState("vortex");
+  const [variationAmount, setVariationAmount] = useState(0.24);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [customPresets, setCustomPresets] = useState([]);
   const isVortexMode = settings.mode === "vortex";
+  const activePreset = PRESET_BY_ID[preset];
 
   const update = (key, value) => setSettings((prev) => ({ ...prev, [key]: value }));
 
   const applyPreset = (key) => {
+    const selected = PRESET_BY_ID[key];
+    if (!selected) return;
     setPreset(key);
-    const next = PRESETS[key];
+    const next = { ...selected.settings };
+    setPresetCategory(selected.category);
     if (next.mode === "vortex") {
-      setSpiralProfile("vortex");
-      setSettings({ ...VORTEX_DEFAULTS, ...next, ...SPIRAL_PROFILES.vortex });
+      if (key.includes("open")) setSpiralProfile("open");
+      else if (key.includes("shell")) setSpiralProfile("shell");
+      else setSpiralProfile("vortex");
+      setSettings({ ...VORTEX_DEFAULTS, ...next });
       return;
     }
     setSettings(next);
@@ -475,6 +589,78 @@ export default function App() {
     }));
   };
 
+  const randomizeCurrentMode = () => {
+    const seed = settings.mode === "vortex" ? { ...SPIRAL_PROFILES[spiralProfile] } : {};
+    setSettings(buildRandomSettings(settings.mode, seed, 0.86));
+  };
+
+  const surpriseMe = () => {
+    const picked = randomChoice(PRESET_LIBRARY);
+    setPresetCategory(picked.category);
+    setPreset(picked.id);
+    setSettings(mutateSettings({ ...picked.settings }, 0.22));
+    if (picked.settings.mode === "vortex") {
+      setSpiralProfile(picked.id.includes("open") ? "open" : picked.id.includes("shell") ? "shell" : "vortex");
+    }
+  };
+
+  const mutatePreset = () => {
+    const anchor = activePreset?.settings ?? settings;
+    setSettings(mutateSettings(anchor, variationAmount));
+  };
+
+  const nudgeSettings = () => {
+    setSettings((prev) => mutateSettings(prev, variationAmount * 0.55));
+  };
+
+  const copyPresetJson = async () => {
+    const payload = {
+      name: activePreset?.name ?? "Custom Study",
+      category: activePreset?.category ?? "Custom",
+      settings,
+    };
+    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+  };
+
+  const saveCustomPreset = () => {
+    const name = window.prompt("Preset name", `Custom ${new Date().toLocaleDateString()}`);
+    if (!name) return;
+    const item = {
+      id: `custom-${Date.now()}`,
+      name,
+      category: "Custom",
+      settings: { ...settings },
+    };
+    const next = [item, ...customPresets].slice(0, 24);
+    setCustomPresets(next);
+    localStorage.setItem(CUSTOM_PRESETS_KEY, JSON.stringify(next));
+  };
+
+  const loadCustomPreset = (id) => {
+    const found = customPresets.find((item) => item.id === id);
+    if (!found) return;
+    setSettings({ ...found.settings });
+  };
+
+  useEffect(() => {
+    const raw = localStorage.getItem(CUSTOM_PRESETS_KEY);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) setCustomPresets(parsed);
+    } catch {
+      // noop
+    }
+  }, []);
+
+  useEffect(() => {
+    const inCategory = PRESET_LIBRARY.filter((item) => item.category === presetCategory);
+    if (!inCategory.some((item) => item.id === preset) && inCategory[0]) {
+      applyPreset(inCategory[0].id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetCategory]);
+
   const titles = {
     decay: ["Decay", "Damped Oscillation"],
     standing: ["Standing Wave", "Symmetrical Harmonic Form"],
@@ -485,6 +671,10 @@ export default function App() {
   };
 
   const [title, subtitle] = titles[settings.mode];
+  const presetIsDirty = useMemo(() => {
+    if (!activePreset) return true;
+    return JSON.stringify(activePreset.settings) !== JSON.stringify(settings);
+  }, [activePreset, settings]);
 
   const downloadSvg = () => {
     const svg = document.getElementById("harmonic-poster-svg");
@@ -498,6 +688,39 @@ export default function App() {
     a.download = `${title.toLowerCase().replace(/\s+/g, "-")}.svg`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const downloadPng = () => {
+    const svg = document.getElementById("harmonic-poster-svg");
+    if (!svg) return;
+    const serializer = new XMLSerializer();
+    const source = serializer.serializeToString(svg);
+    const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const width = 2800;
+      const height = 1680;
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob((pngBlob) => {
+        if (!pngBlob) return;
+        const pngUrl = URL.createObjectURL(pngBlob);
+        const a = document.createElement("a");
+        a.href = pngUrl;
+        a.download = `${title.toLowerCase().replace(/\s+/g, "-")}.png`;
+        a.click();
+        URL.revokeObjectURL(pngUrl);
+      }, "image/png");
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
   };
 
   const infoCards = (
@@ -532,7 +755,21 @@ export default function App() {
         </p>
       </CardHeader>
       <CardContent className="space-y-6">
-        <Section title="Preset & Form" description="Use presets for quick starting points, then switch the underlying form mode without losing your current tuning.">
+        <Section title="Preset Browser" description="Curated studies grouped by family so exploration feels intentional instead of random.">
+          <div className="space-y-2">
+            <Label>Preset Category</Label>
+            <Select value={presetCategory} onValueChange={setPresetCategory}>
+              <SelectTrigger className="border-zinc-800 bg-zinc-950">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PRESET_CATEGORIES.map((category) => (
+                  <SelectItem key={category} value={category}>{category}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="space-y-2">
             <Label>Preset</Label>
             <Select value={preset} onValueChange={applyPreset}>
@@ -540,12 +777,9 @@ export default function App() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="decay">Decay</SelectItem>
-                <SelectItem value="standing">Standing Wave</SelectItem>
-                <SelectItem value="interference">Interference</SelectItem>
-                <SelectItem value="resonance">Resonance</SelectItem>
-                <SelectItem value="orbital">Orbital Ribbon</SelectItem>
-                <SelectItem value="vortex">Vortex Spiral</SelectItem>
+                {PRESET_LIBRARY.filter((item) => item.category === presetCategory).map((item) => (
+                  <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -567,6 +801,11 @@ export default function App() {
             </Select>
           </div>
 
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-400">
+            <div className="font-medium text-zinc-200">{activePreset?.name ?? "Custom Live State"}</div>
+            <div className="mt-1">{presetIsDirty ? "Modified from preset" : "Matching preset values"}</div>
+          </div>
+
           {isVortexMode && (
             <div className="space-y-2">
               <Label>Spiral Recipe</Label>
@@ -584,6 +823,43 @@ export default function App() {
           )}
         </Section>
 
+        <Section title="Exploration" description="Tasteful exploration tools that stay within premium poster-ready bounds.">
+          <Control label="Variation Amount" value={variationAmount} min={0.05} max={0.55} step={0.01} onChange={setVariationAmount} />
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="secondary" className="rounded-xl" onClick={randomizeCurrentMode}>Randomise Current Mode</Button>
+            <Button variant="secondary" className="rounded-xl" onClick={surpriseMe}>Surprise Me</Button>
+            <Button variant="secondary" className="rounded-xl" onClick={mutatePreset}>Mutate Preset</Button>
+            <Button variant="secondary" className="rounded-xl" onClick={nudgeSettings}>Nudge Settings</Button>
+          </div>
+        </Section>
+
+        <Section title="Workflow" description="Save discoveries, reload them later, and share exact settings quickly.">
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="secondary" className="rounded-xl" onClick={saveCustomPreset}>Save Custom Preset</Button>
+            <Button variant="secondary" className="rounded-xl" onClick={copyPresetJson}>Copy Preset JSON</Button>
+          </div>
+          <div className="space-y-2">
+            <Label>Load Custom Preset</Label>
+            <Select value="" onValueChange={loadCustomPreset}>
+              <SelectTrigger className="border-zinc-800 bg-zinc-950">
+                <SelectValue placeholder={customPresets.length ? "Choose saved preset" : "No saved presets yet"} />
+              </SelectTrigger>
+              <SelectContent>
+                {customPresets.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </Section>
+
+        <Section title="Panel" description="Core controls stay visible while advanced tuning can be collapsed.">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="advanced" className="text-zinc-200">Show Advanced Controls</Label>
+            <Switch id="advanced" checked={showAdvanced} onCheckedChange={setShowAdvanced} />
+          </div>
+        </Section>
+
         {!isVortexMode ? (
           <>
             <Section title="Structure" description="These sliders change the logic of the form, not just the amount of motion.">
@@ -592,12 +868,16 @@ export default function App() {
               <Control label="Symmetry" value={settings.symmetry} min={0} max={1} step={0.01} onChange={(v) => update("symmetry", v)} />
               <Control label="Direction Bias" value={settings.directionBias} min={-1} max={1} step={0.01} onChange={(v) => update("directionBias", v)} />
               <Control label="Focal Compression" value={settings.focalCompression} min={0} max={1} step={0.01} onChange={(v) => update("focalCompression", v)} />
-              {settings.mode === "decay" && (
+              {showAdvanced && settings.mode === "decay" && (
                 <Control label="Damping" value={settings.damping} min={0.2} max={5} step={0.01} onChange={(v) => update("damping", v)} />
               )}
-              <Control label="Secondary Mix" value={settings.secondaryMix} min={0} max={1} step={0.01} onChange={(v) => update("secondaryMix", v)} />
-              <Control label="Secondary Frequency" value={settings.secondaryFrequency} min={0.5} max={18} step={0.1} onChange={(v) => update("secondaryFrequency", v)} />
-              <Control label="Secondary Phase" value={settings.secondaryPhase} min={0} max={6.28} step={0.01} onChange={(v) => update("secondaryPhase", v)} />
+              {showAdvanced && (
+                <>
+                  <Control label="Secondary Mix" value={settings.secondaryMix} min={0} max={1} step={0.01} onChange={(v) => update("secondaryMix", v)} />
+                  <Control label="Secondary Frequency" value={settings.secondaryFrequency} min={0.5} max={18} step={0.1} onChange={(v) => update("secondaryFrequency", v)} />
+                  <Control label="Secondary Phase" value={settings.secondaryPhase} min={0} max={6.28} step={0.01} onChange={(v) => update("secondaryPhase", v)} />
+                </>
+              )}
             </Section>
 
             <Section title="Lines" description="Shape the trace density and the amount of woven separation between lines.">
@@ -611,15 +891,19 @@ export default function App() {
             <Section title="Composition" description="Control how the form sits on the poster and how much space it leaves to breathe.">
               <Control label="Scale" value={settings.scale} min={0.45} max={1.1} step={0.01} onChange={(v) => update("scale", v)} />
               <Control label="Vertical Offset" value={settings.yOffset} min={-1} max={1} step={0.01} onChange={(v) => update("yOffset", v)} />
-              <Control label="Horizontal Padding" value={settings.xPadding} min={0.01} max={0.2} step={0.005} onChange={(v) => update("xPadding", v)} />
+              {showAdvanced && (
+                <Control label="Horizontal Padding" value={settings.xPadding} min={0.01} max={0.2} step={0.005} onChange={(v) => update("xPadding", v)} />
+              )}
             </Section>
 
-            <Section title="Display" description="Keep the axis line only where it helps the poster feel more structural and intentional.">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="axis" className="text-zinc-200">Axis Line</Label>
-                <Switch id="axis" checked={settings.axisLine} onCheckedChange={(v) => update("axisLine", v)} />
-              </div>
-            </Section>
+            {showAdvanced && (
+              <Section title="Display" description="Keep the axis line only where it helps the poster feel more structural and intentional.">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="axis" className="text-zinc-200">Axis Line</Label>
+                  <Switch id="axis" checked={settings.axisLine} onCheckedChange={(v) => update("axisLine", v)} />
+                </div>
+              </Section>
+            )}
           </>
         ) : (
           <>
@@ -628,7 +912,9 @@ export default function App() {
               <Control label="Spiral Growth" value={settings.spiralGrowth} min={-0.8} max={3.6} step={0.01} onChange={(v) => update("spiralGrowth", v)} />
               <Control label="Centre Pull" value={settings.centerPull} min={0} max={1} step={0.01} onChange={(v) => update("centerPull", v)} />
               <Control label="Inner Void" value={settings.innerVoid} min={0} max={0.55} step={0.01} onChange={(v) => update("innerVoid", v)} />
-              <Control label="Ellipse" value={settings.ellipse} min={0} max={1} step={0.01} onChange={(v) => update("ellipse", v)} />
+              {showAdvanced && (
+                <Control label="Ellipse" value={settings.ellipse} min={0} max={1} step={0.01} onChange={(v) => update("ellipse", v)} />
+              )}
             </Section>
 
             <Section title="Spiral Density" description="Control trace layering and where density concentrates to keep the silhouette clean instead of muddy.">
@@ -660,14 +946,19 @@ export default function App() {
           </>
         )}
 
-        <div className="flex gap-3">
-          <Button className="flex-1 rounded-2xl" onClick={() => applyPreset(preset)}>
-            <RefreshCw className="mr-2 h-4 w-4" /> Reset Preset
-          </Button>
-          <Button variant="secondary" className="flex-1 rounded-2xl" onClick={downloadSvg}>
-            <Download className="mr-2 h-4 w-4" /> Export SVG
-          </Button>
-        </div>
+        <Section title="Export" description="Poster-focused exports with clean vector and high-resolution raster output.">
+          <div className="grid grid-cols-2 gap-2">
+            <Button className="rounded-2xl" disabled={!activePreset} onClick={() => (activePreset ? applyPreset(activePreset.id) : undefined)}>
+              <RefreshCw className="mr-2 h-4 w-4" /> Reset to Preset
+            </Button>
+            <Button variant="secondary" className="rounded-2xl" onClick={downloadSvg}>
+              <Download className="mr-2 h-4 w-4" /> Export SVG
+            </Button>
+            <Button variant="secondary" className="col-span-2 rounded-2xl" onClick={downloadPng}>
+              <Download className="mr-2 h-4 w-4" /> Export PNG
+            </Button>
+          </div>
+        </Section>
       </CardContent>
     </Card>
   );
