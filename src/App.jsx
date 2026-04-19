@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Download, RefreshCw } from "lucide-react";
 
 const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+const lerp = (a, b, t) => a + (b - a) * t;
 const TAU = Math.PI * 2;
 
 const PRESETS = {
@@ -22,6 +23,9 @@ const PRESETS = {
     secondaryMix: 0.24,
     secondaryFrequency: 10,
     secondaryPhase: 1.4,
+    symmetry: 0.18,
+    directionBias: -0.55,
+    focalCompression: 0.16,
     axisLine: false,
     endpoints: true,
     thickness: 1.15,
@@ -41,6 +45,9 @@ const PRESETS = {
     secondaryMix: 0.12,
     secondaryFrequency: 4,
     secondaryPhase: 1.57,
+    symmetry: 0.94,
+    directionBias: 0,
+    focalCompression: 0.2,
     axisLine: false,
     endpoints: true,
     thickness: 1,
@@ -60,6 +67,9 @@ const PRESETS = {
     secondaryMix: 0.72,
     secondaryFrequency: 5.1,
     secondaryPhase: 1.18,
+    symmetry: 0.72,
+    directionBias: 0.08,
+    focalCompression: 0.42,
     axisLine: false,
     endpoints: true,
     thickness: 1,
@@ -79,6 +89,9 @@ const PRESETS = {
     secondaryMix: 0.4,
     secondaryFrequency: 8.2,
     secondaryPhase: 0.7,
+    symmetry: 0.84,
+    directionBias: 0.12,
+    focalCompression: 0.68,
     axisLine: true,
     endpoints: false,
     thickness: 1.1,
@@ -98,6 +111,9 @@ const PRESETS = {
     secondaryMix: 0.45,
     secondaryFrequency: 4,
     secondaryPhase: 1.57,
+    symmetry: 0.58,
+    directionBias: 0.18,
+    focalCompression: 0.46,
     axisLine: true,
     endpoints: false,
     thickness: 1,
@@ -117,6 +133,9 @@ const PRESETS = {
     secondaryMix: 0.25,
     secondaryFrequency: 13,
     secondaryPhase: 0.8,
+    symmetry: 0.64,
+    directionBias: 0.04,
+    focalCompression: 0.74,
     axisLine: false,
     endpoints: false,
     thickness: 0.95,
@@ -136,6 +155,7 @@ function buildWavePath(settings, lineIndex, width, height) {
   const {
     mode, frequency, amplitude, lineCount, spread, phaseSpread,
     damping, secondaryMix, secondaryFrequency, secondaryPhase,
+    symmetry, directionBias, focalCompression,
     scale, yOffset, xPadding,
   } = settings;
 
@@ -146,49 +166,56 @@ function buildWavePath(settings, lineIndex, width, height) {
   const n = 600;
   const mid = (lineCount - 1) / 2;
   const norm = lineCount <= 1 ? 0 : (lineIndex - mid) / mid;
-  const phaseOffset = norm * phaseSpread;
+  const symmetryBias = lerp(norm, Math.sign(norm) * Math.abs(norm) ** (1.6 - symmetry * 0.8), symmetry);
+  const phaseOffset = symmetryBias * phaseSpread;
   const ampOffset = 1 + norm * spread;
+  const focusCenter = clamp(0.5 + directionBias * 0.22, 0.12, 0.88);
+  const focusSigma = lerp(0.32, 0.12, focalCompression);
 
   let d = "";
   for (let i = 0; i <= n; i += 1) {
     const t = i / n;
     const x = padX + t * usableWidth;
     const u = t * TAU;
+    const mirroredT = 1 - Math.abs(2 * t - 1);
+    const structuralT = lerp(t, mirroredT, symmetry);
+    const focusBoost = 1 + focalCompression * gaussian(t, focusCenter, focusSigma) * 1.25;
     let yNorm = 0;
 
     if (mode === "decay") {
-      const env = Math.exp(-damping * t);
+      const biasedT = clamp(t + Math.max(0, directionBias) * 0.22, 0, 1);
+      const env = Math.exp(-damping * biasedT);
       const w1 = Math.sin(frequency * u + phaseOffset);
       const w2 = secondaryMix * Math.sin(secondaryFrequency * u + secondaryPhase + phaseOffset * 0.6);
-      yNorm = (w1 + w2) * env * ampOffset;
+      yNorm = (w1 + w2) * env * ampOffset * lerp(1, focusBoost, 0.35);
     } else if (mode === "standing") {
-      const envelope = Math.sin(Math.PI * t);
-      const carrier = Math.sin(frequency * Math.PI * t + phaseOffset);
-      const shimmer = secondaryMix * 0.3 * Math.sin(secondaryFrequency * Math.PI * t + secondaryPhase + phaseOffset);
-      yNorm = envelope * (carrier + shimmer) * ampOffset;
+      const envelope = lerp(Math.sin(Math.PI * t), Math.sin(Math.PI * structuralT), symmetry);
+      const carrier = Math.sin(frequency * Math.PI * structuralT + phaseOffset);
+      const shimmer = secondaryMix * 0.3 * Math.sin(secondaryFrequency * Math.PI * structuralT + secondaryPhase + phaseOffset);
+      yNorm = envelope * (carrier + shimmer) * ampOffset * lerp(1, focusBoost, 0.45);
     } else if (mode === "interference") {
       const w1 = Math.sin(frequency * u + phaseOffset);
       const w2 = secondaryMix * Math.sin(secondaryFrequency * u + secondaryPhase - phaseOffset * 0.8);
-      yNorm = (w1 + w2) * 0.5 * ampOffset;
+      yNorm = (w1 + w2) * 0.5 * ampOffset * focusBoost;
     } else if (mode === "resonance") {
       const env =
         0.18 +
-        0.45 * gaussian(t, 0.25, 0.09) +
-        1.1 * gaussian(t, 0.55, 0.08) +
-        0.75 * gaussian(t, 0.73, 0.06);
+        0.45 * gaussian(t, 0.25 + directionBias * 0.04, 0.09) +
+        1.1 * gaussian(t, 0.55 + directionBias * 0.08, lerp(0.09, 0.05, focalCompression)) +
+        0.75 * gaussian(t, 0.73 + directionBias * 0.05, 0.06);
       const w1 = Math.sin(frequency * u + phaseOffset);
       const w2 = secondaryMix * Math.sin(secondaryFrequency * u + secondaryPhase + phaseOffset * 0.4);
-      yNorm = (w1 + w2) * env * ampOffset;
+      yNorm = (w1 + w2) * env * ampOffset * lerp(1, focusBoost, 0.5);
     } else if (mode === "orbital") {
       const orbit = Math.sin(u * frequency * 0.5 + phaseOffset);
       const fold = Math.sin(u * secondaryFrequency * 0.25 + secondaryPhase);
       const ribbon = Math.sin(u * frequency + phaseOffset) * 0.45;
-      yNorm = (orbit * fold + ribbon * secondaryMix) * ampOffset;
+      yNorm = (orbit * fold + ribbon * secondaryMix) * ampOffset * lerp(1, focusBoost, 0.4);
     } else if (mode === "vortex") {
-      const radialEnv = Math.sin(Math.PI * t) ** 0.9;
-      const spiral = Math.sin(frequency * u + phaseOffset + t * TAU * 0.75);
+      const radialEnv = Math.sin(Math.PI * structuralT) ** lerp(1.2, 0.85, symmetry);
+      const spiral = Math.sin(frequency * u + phaseOffset + t * TAU * (0.65 + focalCompression * 0.35));
       const turbulence = secondaryMix * 0.4 * Math.sin(secondaryFrequency * u - phaseOffset * 0.5);
-      yNorm = radialEnv * (spiral + turbulence) * ampOffset;
+      yNorm = radialEnv * (spiral + turbulence) * ampOffset * focusBoost;
     }
 
     const y = centerY - yNorm * ampPx;
@@ -200,10 +227,12 @@ function buildWavePath(settings, lineIndex, width, height) {
 function buildOrbitalPath(settings, lineIndex, width, height) {
   const {
     frequency, amplitude, lineCount, spread, phaseSpread,
-    secondaryMix, secondaryFrequency, secondaryPhase, scale, yOffset,
+    secondaryMix, secondaryFrequency, secondaryPhase,
+    symmetry, directionBias, focalCompression,
+    scale, yOffset,
   } = settings;
 
-  const cx = width / 2;
+  const cx = width / 2 + directionBias * width * 0.08;
   const cy = height / 2 + yOffset * height * 0.25;
   const rx = width * 0.24 * scale;
   const ry = height * 0.21 * scale;
@@ -211,19 +240,21 @@ function buildOrbitalPath(settings, lineIndex, width, height) {
   const norm = lineCount <= 1 ? 0 : (lineIndex - mid) / mid;
   const phaseOffset = norm * phaseSpread;
   const sizeOffset = 1 + norm * spread * 0.6;
+  const tension = 1 + focalCompression * 0.35;
 
   let d = "";
   const steps = 900;
   for (let i = 0; i <= steps; i += 1) {
     const t = (i / steps) * TAU;
+    const symmetryFold = lerp(1, Math.cos(t * 2), symmetry * 0.25);
     const x =
       cx +
       rx * sizeOffset * Math.sin(t) +
       rx * 0.35 * secondaryMix * Math.sin(secondaryFrequency * t + secondaryPhase + phaseOffset);
     const y =
       cy +
-      ry * sizeOffset * Math.sin(frequency * t + phaseOffset) * amplitude +
-      ry * 0.28 * Math.cos(t * 2 + phaseOffset * 0.4);
+      ry * sizeOffset * Math.sin(frequency * t + phaseOffset) * amplitude * tension +
+      ry * 0.28 * Math.cos(t * (1.4 + symmetry * 0.6) + phaseOffset * 0.4) * symmetryFold;
     d += i === 0 ? `M ${x.toFixed(2)} ${y.toFixed(2)}` : ` L ${x.toFixed(2)} ${y.toFixed(2)}`;
   }
   return d;
@@ -232,33 +263,38 @@ function buildOrbitalPath(settings, lineIndex, width, height) {
 function buildVortexPath(settings, lineIndex, width, height) {
   const {
     frequency, amplitude, lineCount, spread, phaseSpread,
-    secondaryMix, secondaryFrequency, secondaryPhase, scale, yOffset,
+    secondaryMix, secondaryFrequency, secondaryPhase,
+    symmetry, directionBias, focalCompression,
+    scale, yOffset,
   } = settings;
 
-  const cx = width / 2;
+  const cx = width / 2 + directionBias * width * 0.06;
   const cy = height / 2 + yOffset * height * 0.25;
   const maxR = Math.min(width, height) * 0.29 * scale;
   const mid = (lineCount - 1) / 2;
   const norm = lineCount <= 1 ? 0 : (lineIndex - mid) / mid;
   const phaseOffset = norm * phaseSpread;
   const radiusBias = 1 + norm * spread * 0.8;
+  const radiusCurve = lerp(1, 0.68, focalCompression);
 
   let d = "";
   const steps = 1100;
   for (let i = 0; i <= steps; i += 1) {
     const t = i / steps;
-    const angle = t * TAU * (2.5 + frequency * 0.22) + phaseOffset;
-    const radius =
-      maxR * t * radiusBias *
-      (0.9 + 0.14 * Math.sin(secondaryFrequency * angle + secondaryPhase) * secondaryMix);
+    const easedT = t ** radiusCurve;
+    const angle = easedT * TAU * (2.4 + frequency * 0.22) + phaseOffset;
+    const turbulence = 0.9 + 0.14 * Math.sin(secondaryFrequency * angle + secondaryPhase) * secondaryMix;
+    const asymmetry = 1 + directionBias * 0.12 * Math.cos(angle);
+    const verticalSqueeze = lerp(1, 0.78, 1 - symmetry);
+    const radius = maxR * easedT * radiusBias * turbulence * asymmetry;
     const x = cx + radius * Math.cos(angle);
-    const y = cy + radius * Math.sin(angle) * amplitude;
+    const y = cy + radius * Math.sin(angle) * amplitude * verticalSqueeze;
     d += i === 0 ? `M ${x.toFixed(2)} ${y.toFixed(2)}` : ` L ${x.toFixed(2)} ${y.toFixed(2)}`;
   }
   return d;
 }
 
-function HarmonicSvg({ settings, title, subtitle }) {
+function HarmonicSvg({ settings }) {
   const width = 1400;
   const height = 840;
 
@@ -326,6 +362,18 @@ function Control({ label, value, min, max, step = 0.01, onChange }) {
   );
 }
 
+function Section({ title, description, children }) {
+  return (
+    <div className="grid gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+      <div className="space-y-1">
+        <div className="text-sm font-medium text-zinc-100">{title}</div>
+        {description && <p className="text-xs leading-relaxed text-zinc-500">{description}</p>}
+      </div>
+      <div className="grid gap-4">{children}</div>
+    </div>
+  );
+}
+
 export default function App() {
   const [preset, setPreset] = useState("interference");
   const [settings, setSettings] = useState(PRESETS.interference);
@@ -335,6 +383,14 @@ export default function App() {
   const applyPreset = (key) => {
     setPreset(key);
     setSettings(PRESETS[key]);
+  };
+
+  const changeMode = (mode) => {
+    setSettings((prev) => ({
+      ...prev,
+      mode,
+      axisLine: mode === "resonance" || mode === "orbital" ? prev.axisLine : prev.axisLine,
+    }));
   };
 
   const titles = {
@@ -366,20 +422,20 @@ export default function App() {
     <div className="grid gap-4 md:grid-cols-3">
       <Card className="border-zinc-800 bg-zinc-900/50">
         <CardContent className="p-4 text-sm text-zinc-400">
-          <div className="mb-2 text-zinc-200">What this is</div>
-          A curated harmonic poster generator, not a literal audio tool. The goal is elegant printable motion studies.
+          <div className="mb-2 text-zinc-200">What changed</div>
+          This pass adds form-level controls so the engine can shift from balanced studies toward more directional, compressed, or asymmetrical pieces.
         </CardContent>
       </Card>
       <Card className="border-zinc-800 bg-zinc-900/50">
         <CardContent className="p-4 text-sm text-zinc-400">
-          <div className="mb-2 text-zinc-200">Strongest presets</div>
-          Decay, Interference, and Resonance are the clearest commercial starting points for premium print outputs.
+          <div className="mb-2 text-zinc-200">Best new controls</div>
+          Symmetry, Direction Bias, and Focal Compression are the fastest way to widen the family without adding a messy wall of sliders.
         </CardContent>
       </Card>
       <Card className="border-zinc-800 bg-zinc-900/50">
         <CardContent className="p-4 text-sm text-zinc-400">
-          <div className="mb-2 text-zinc-200">Export path</div>
-          This exports SVG linework now. Later you can add PNG export, poster typography templates, and saved collections.
+          <div className="mb-2 text-zinc-200">Next unlock</div>
+          If you want even more range after this, the next upgrade should be a true radial or field mode rather than more waveform modifiers.
         </CardContent>
       </Card>
     </div>
@@ -390,52 +446,80 @@ export default function App() {
       <CardHeader>
         <CardTitle className="text-xl">Harmonic Form Studio</CardTitle>
         <p className="text-sm text-zinc-400">
-          Build poster-ready oscillation forms with curated presets and fine control over motion, trace density, and composition.
+          Build poster-ready oscillation forms with clearer separation between structure, line behaviour, and composition.
         </p>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="space-y-2">
-          <Label>Preset</Label>
-          <Select value={preset} onValueChange={applyPreset}>
-            <SelectTrigger className="border-zinc-800 bg-zinc-950">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="decay">Decay</SelectItem>
-              <SelectItem value="standing">Standing Wave</SelectItem>
-              <SelectItem value="interference">Interference</SelectItem>
-              <SelectItem value="resonance">Resonance</SelectItem>
-              <SelectItem value="orbital">Orbital Ribbon</SelectItem>
-              <SelectItem value="vortex">Vortex Spiral</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <Section title="Preset & Form" description="Use presets for quick starting points, then switch the underlying form mode without losing your current tuning.">
+          <div className="space-y-2">
+            <Label>Preset</Label>
+            <Select value={preset} onValueChange={applyPreset}>
+              <SelectTrigger className="border-zinc-800 bg-zinc-950">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="decay">Decay</SelectItem>
+                <SelectItem value="standing">Standing Wave</SelectItem>
+                <SelectItem value="interference">Interference</SelectItem>
+                <SelectItem value="resonance">Resonance</SelectItem>
+                <SelectItem value="orbital">Orbital Ribbon</SelectItem>
+                <SelectItem value="vortex">Vortex Spiral</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-        <div className="grid gap-4">
+          <div className="space-y-2">
+            <Label>Form Mode</Label>
+            <Select value={settings.mode} onValueChange={changeMode}>
+              <SelectTrigger className="border-zinc-800 bg-zinc-950">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="decay">Decay</SelectItem>
+                <SelectItem value="standing">Standing Wave</SelectItem>
+                <SelectItem value="interference">Interference</SelectItem>
+                <SelectItem value="resonance">Resonance</SelectItem>
+                <SelectItem value="orbital">Orbital Ribbon</SelectItem>
+                <SelectItem value="vortex">Vortex Spiral</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </Section>
+
+        <Section title="Structure" description="These sliders change the logic of the form, not just the amount of motion.">
           <Control label="Frequency" value={settings.frequency} min={0.5} max={14} step={0.1} onChange={(v) => update("frequency", v)} />
           <Control label="Amplitude" value={settings.amplitude} min={0.1} max={1.2} step={0.01} onChange={(v) => update("amplitude", v)} />
-          <Control label="Line Count" value={settings.lineCount} min={6} max={60} step={1} onChange={(v) => update("lineCount", Math.round(v))} />
-          <Control label="Line Spread" value={settings.spread} min={0} max={0.5} step={0.01} onChange={(v) => update("spread", v)} />
-          <Control label="Phase Spread" value={settings.phaseSpread} min={0} max={3} step={0.01} onChange={(v) => update("phaseSpread", v)} />
-          <Control label="Secondary Mix" value={settings.secondaryMix} min={0} max={1} step={0.01} onChange={(v) => update("secondaryMix", v)} />
-          <Control label="Secondary Frequency" value={settings.secondaryFrequency} min={0.5} max={18} step={0.1} onChange={(v) => update("secondaryFrequency", v)} />
-          <Control label="Secondary Phase" value={settings.secondaryPhase} min={0} max={6.28} step={0.01} onChange={(v) => update("secondaryPhase", v)} />
+          <Control label="Symmetry" value={settings.symmetry} min={0} max={1} step={0.01} onChange={(v) => update("symmetry", v)} />
+          <Control label="Direction Bias" value={settings.directionBias} min={-1} max={1} step={0.01} onChange={(v) => update("directionBias", v)} />
+          <Control label="Focal Compression" value={settings.focalCompression} min={0} max={1} step={0.01} onChange={(v) => update("focalCompression", v)} />
           {settings.mode === "decay" && (
             <Control label="Damping" value={settings.damping} min={0.2} max={5} step={0.01} onChange={(v) => update("damping", v)} />
           )}
+          <Control label="Secondary Mix" value={settings.secondaryMix} min={0} max={1} step={0.01} onChange={(v) => update("secondaryMix", v)} />
+          <Control label="Secondary Frequency" value={settings.secondaryFrequency} min={0.5} max={18} step={0.1} onChange={(v) => update("secondaryFrequency", v)} />
+          <Control label="Secondary Phase" value={settings.secondaryPhase} min={0} max={6.28} step={0.01} onChange={(v) => update("secondaryPhase", v)} />
+        </Section>
+
+        <Section title="Lines" description="Shape the trace density and the amount of woven separation between lines.">
+          <Control label="Line Count" value={settings.lineCount} min={6} max={60} step={1} onChange={(v) => update("lineCount", Math.round(v))} />
+          <Control label="Line Spread" value={settings.spread} min={0} max={0.5} step={0.01} onChange={(v) => update("spread", v)} />
+          <Control label="Phase Spread" value={settings.phaseSpread} min={0} max={3} step={0.01} onChange={(v) => update("phaseSpread", v)} />
           <Control label="Stroke Weight" value={settings.thickness} min={0.4} max={2.2} step={0.01} onChange={(v) => update("thickness", v)} />
           <Control label="Opacity" value={settings.opacity} min={0.1} max={1} step={0.01} onChange={(v) => update("opacity", v)} />
+        </Section>
+
+        <Section title="Composition" description="Control how the form sits on the poster and how much space it leaves to breathe.">
           <Control label="Scale" value={settings.scale} min={0.45} max={1.1} step={0.01} onChange={(v) => update("scale", v)} />
           <Control label="Vertical Offset" value={settings.yOffset} min={-1} max={1} step={0.01} onChange={(v) => update("yOffset", v)} />
           <Control label="Horizontal Padding" value={settings.xPadding} min={0.01} max={0.2} step={0.005} onChange={(v) => update("xPadding", v)} />
-        </div>
+        </Section>
 
-        <div className="grid gap-4 rounded-2xl border border-zinc-700 bg-zinc-900/80 p-4">
+        <Section title="Display" description="Keep the axis line only where it helps the poster feel more structural and intentional.">
           <div className="flex items-center justify-between">
             <Label htmlFor="axis" className="text-zinc-200">Axis Line</Label>
             <Switch id="axis" checked={settings.axisLine} onCheckedChange={(v) => update("axisLine", v)} />
           </div>
-        </div>
+        </Section>
 
         <div className="flex gap-3">
           <Button className="flex-1 rounded-2xl" onClick={() => applyPreset(preset)}>
@@ -451,30 +535,29 @@ export default function App() {
 
   return (
     <div className="bg-zinc-950 text-zinc-100">
-      {/* ── MOBILE layout: image pinned top, controls scroll below ── */}
       <div className="flex flex-col h-screen overflow-hidden lg:hidden">
-        {/* Image — fixed height, never scrolls */}
         <div className="flex-shrink-0 p-2 pt-3">
           <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-2 shadow-2xl shadow-black/30">
-            <HarmonicSvg settings={settings} title={title} subtitle={subtitle} />
+            <HarmonicSvg settings={settings} />
           </div>
         </div>
-        {/* Controls — fills remaining height, scrolls */}
         <div className="flex-1 overflow-y-auto p-2 pb-6 space-y-4">
           {controls}
         </div>
       </div>
 
-      {/* ── DESKTOP layout: two-column grid ── */}
       <div className="hidden lg:block min-h-screen">
         <div className="mx-auto grid max-w-7xl gap-6 p-6 lg:grid-cols-[360px_1fr]">
-          {/* Controls column */}
           <div>{controls}</div>
-          {/* Preview column */}
           <div className="space-y-4">
             <div className="sticky top-4 z-20 space-y-4">
               <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/30 p-4 shadow-2xl shadow-black/30">
-                <HarmonicSvg settings={settings} title={title} subtitle={subtitle} />
+                <HarmonicSvg settings={settings} />
+              </div>
+              <div className="px-1">
+                <div className="text-sm uppercase tracking-[0.22em] text-zinc-500">Current Study</div>
+                <div className="mt-1 text-2xl font-medium text-zinc-100">{title}</div>
+                <div className="text-sm text-zinc-500">{subtitle}</div>
               </div>
               {infoCards}
             </div>
@@ -483,4 +566,4 @@ export default function App() {
       </div>
     </div>
   );
-    }
+}
