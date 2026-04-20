@@ -559,17 +559,17 @@ function HarmonicSvg({ settings }) {
           y1={height / 2}
           x2={width - 120}
           y2={height / 2}
-          stroke="rgba(255,255,255,0.78)"
+          stroke="rgba(255,253,248,0.92)"
           strokeWidth="1.1"
         />
       )}
-      <g fill="none" stroke="#F5F3EE" strokeLinecap="round" strokeLinejoin="round">
+      <g fill="none" stroke="#FFFDF8" strokeLinecap="round" strokeLinejoin="round">
         {paths.map((d, i) => (
           <path
             key={i}
             d={d}
             strokeWidth={settings.thickness}
-            strokeOpacity={strokeOpacity * (0.45 + (i / Math.max(1, paths.length - 1)) * 0.55)}
+            strokeOpacity={strokeOpacity * (0.72 + (i / Math.max(1, paths.length - 1)) * 0.28)}
           />
         ))}
       </g>
@@ -584,7 +584,7 @@ function Control({ label, value = 0, min, max, step = 0.01, onChange }) {
     <div className="space-y-2">
       <div className="flex items-center justify-between text-sm text-zinc-300">
         <Label>{label}</Label>
-        <span className="tabular-nums text-zinc-500">{safeValue.toFixed(2)}</span>
+        <span className="tabular-nums text-zinc-300">{safeValue.toFixed(2)}</span>
       </div>
       <Slider
         value={[safeValue]}
@@ -601,8 +601,8 @@ function Section({ title, description, children }) {
   return (
     <div className="grid gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
       <div className="space-y-1">
-        <div className="text-sm font-medium text-zinc-100">{title}</div>
-        {description && <p className="text-xs leading-relaxed text-zinc-500">{description}</p>}
+        <div className="text-sm font-medium text-zinc-500">{title}</div>
+        {description && <p className="text-xs leading-relaxed text-zinc-300">{description}</p>}
       </div>
       <div className="grid gap-4">{children}</div>
     </div>
@@ -844,11 +844,11 @@ export default function App() {
   );
 
   const controls = (
-    <Card className="border-zinc-800 bg-zinc-900/70 shadow-2xl shadow-black/30 backdrop-blur">
+    <Card className="border-zinc-700 bg-zinc-900">
       <CardHeader>
-        <CardTitle className="text-xl">Harmonic Form Studio</CardTitle>
-        <p className="text-sm text-zinc-400">
-          Build poster-ready oscillation forms with clearer separation between structure, line behaviour, and composition.
+        <CardTitle className="text-xl">Jamie's Math Art</CardTitle>
+        <p className="text-sm text-zinc-50">
+          oscillation forms with clear separation between structure, line behaviour, and composition.
         </p>
       </CardHeader>
       <CardContent className="space-y-6">
