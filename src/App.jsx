@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -33,6 +33,9 @@ const PRESETS = {
     scale: 0.9,
     yOffset: 0,
     xPadding: 0.06,
+    lineJitter: 0.06,
+    bandSoftening: 0.22,
+    densityLimit: 0.18,
   },
   standing: {
     mode: "standing",
@@ -55,6 +58,9 @@ const PRESETS = {
     scale: 0.88,
     yOffset: 0,
     xPadding: 0.08,
+    lineJitter: 0.06,
+    bandSoftening: 0.22,
+    densityLimit: 0.18,
   },
   interference: {
     mode: "interference",
@@ -77,6 +83,9 @@ const PRESETS = {
     scale: 0.88,
     yOffset: 0,
     xPadding: 0.07,
+    lineJitter: 0.06,
+    bandSoftening: 0.22,
+    densityLimit: 0.18,
   },
   resonance: {
     mode: "resonance",
@@ -99,6 +108,9 @@ const PRESETS = {
     scale: 0.9,
     yOffset: 0,
     xPadding: 0.03,
+    lineJitter: 0.06,
+    bandSoftening: 0.22,
+    densityLimit: 0.18,
   },
   orbital: {
     mode: "orbital",
@@ -121,6 +133,9 @@ const PRESETS = {
     scale: 0.78,
     yOffset: 0,
     xPadding: 0.14,
+    lineJitter: 0.06,
+    bandSoftening: 0.22,
+    densityLimit: 0.18,
   },
   vortex: {
     mode: "vortex",
@@ -208,30 +223,35 @@ const MODE_BOUNDS = {
     damping: [1.2, 4.5], secondaryMix: [0.06, 0.45], secondaryFrequency: [3.5, 13], secondaryPhase: [0, TAU],
     symmetry: [0.08, 0.65], directionBias: [-0.75, 0.25], focalCompression: [0.12, 0.7], thickness: [0.75, 1.3],
     opacity: [0.62, 0.86], scale: [0.74, 0.98], yOffset: [-0.22, 0.22], xPadding: [0.03, 0.12],
+    lineJitter: [0, 0.45], bandSoftening: [0, 1], densityLimit: [0, 1],
   },
   standing: {
     frequency: [1.1, 6], amplitude: [0.35, 0.9], lineCount: [16, 42], spread: [0.03, 0.26], phaseSpread: [0.1, 1.4],
     secondaryMix: [0.02, 0.34], secondaryFrequency: [2, 9], secondaryPhase: [0, TAU], symmetry: [0.72, 1],
     directionBias: [-0.25, 0.25], focalCompression: [0.08, 0.56], thickness: [0.75, 1.2], opacity: [0.62, 0.84],
     scale: [0.74, 0.98], yOffset: [-0.2, 0.2], xPadding: [0.03, 0.12],
+    lineJitter: [0, 0.45], bandSoftening: [0, 1], densityLimit: [0, 1],
   },
   interference: {
     frequency: [2, 8], amplitude: [0.3, 0.92], lineCount: [16, 44], spread: [0.06, 0.32], phaseSpread: [0.4, 2.2],
     secondaryMix: [0.2, 0.86], secondaryFrequency: [3, 12], secondaryPhase: [0, TAU], symmetry: [0.34, 0.94],
     directionBias: [-0.25, 0.3], focalCompression: [0.16, 0.72], thickness: [0.72, 1.3], opacity: [0.6, 0.84],
     scale: [0.72, 0.98], yOffset: [-0.26, 0.26], xPadding: [0.03, 0.13],
+    lineJitter: [0, 0.45], bandSoftening: [0, 1], densityLimit: [0, 1],
   },
   resonance: {
     frequency: [3.5, 11], amplitude: [0.45, 1.08], lineCount: [24, 46], spread: [0.06, 0.24], phaseSpread: [0.4, 1.8],
     secondaryMix: [0.14, 0.65], secondaryFrequency: [4, 14], secondaryPhase: [0, TAU], symmetry: [0.58, 1],
     directionBias: [-0.22, 0.32], focalCompression: [0.3, 0.9], thickness: [0.8, 1.35], opacity: [0.66, 0.9],
     scale: [0.76, 1], yOffset: [-0.2, 0.2], xPadding: [0.02, 0.1],
+    lineJitter: [0, 0.45], bandSoftening: [0, 1], densityLimit: [0, 1],
   },
   orbital: {
     frequency: [1.6, 4.8], amplitude: [0.4, 0.95], lineCount: [18, 44], spread: [0.06, 0.28], phaseSpread: [0.5, 1.9],
     secondaryMix: [0.2, 0.76], secondaryFrequency: [2, 7], secondaryPhase: [0, TAU], symmetry: [0.26, 0.86],
     directionBias: [-0.2, 0.34], focalCompression: [0.16, 0.72], thickness: [0.74, 1.24], opacity: [0.58, 0.84],
     scale: [0.64, 0.94], yOffset: [-0.24, 0.24], xPadding: [0.08, 0.18],
+    lineJitter: [0, 0.45], bandSoftening: [0, 1], densityLimit: [0, 1],
   },
   vortex: {
     spiralTurns: [3.6, 11.5], spiralGrowth: [0.1, 3.2], centerPull: [0.12, 0.92], innerVoid: [0.02, 0.35],
@@ -242,6 +262,10 @@ const MODE_BOUNDS = {
 
 const randomBetween = (min, max) => min + Math.random() * (max - min);
 const randomChoice = (items) => items[Math.floor(Math.random() * items.length)];
+const hashNoise = (seed) => {
+  const x = Math.sin(seed * 12.9898) * 43758.5453123;
+  return x - Math.floor(x);
+};
 
 function coerceByExample(value, example) {
   if (typeof example === "number") {
@@ -297,7 +321,7 @@ function buildWavePath(settings, lineIndex, width, height) {
     mode, frequency, amplitude, lineCount, spread, phaseSpread,
     damping, secondaryMix, secondaryFrequency, secondaryPhase,
     symmetry, directionBias, focalCompression,
-    scale, yOffset, xPadding,
+    scale, yOffset, xPadding, lineJitter = 0, bandSoftening = 0, densityLimit = 0,
   } = settings;
 
   const padX = width * xPadding;
@@ -308,50 +332,75 @@ function buildWavePath(settings, lineIndex, width, height) {
   const mid = (lineCount - 1) / 2;
   const norm = lineCount <= 1 ? 0 : (lineIndex - mid) / mid;
   const symmetryBias = lerp(norm, Math.sign(norm) * Math.abs(norm) ** (1.6 - symmetry * 0.8), symmetry);
-  const phaseOffset = symmetryBias * phaseSpread;
-  const ampOffset = 1 + norm * spread;
   const focusCenter = clamp(0.5 + directionBias * 0.22, 0.12, 0.88);
   const focusSigma = lerp(0.32, 0.12, focalCompression);
+  const lineNoise = hashNoise(lineIndex + 1) - 0.5;
+  const jitterNoise = hashNoise((lineIndex + 1) * 1.137) - 0.5;
+  const jitterNoiseB = hashNoise((lineIndex + 1) * 2.731) - 0.5;
+  const seamReliefStrength =
+    width *
+    lerp(0.0006, 0.0032, clamp((symmetry + focalCompression) * 0.5, 0, 1)) *
+    lerp(1, 0.7, bandSoftening);
+
+  const lineJitterPx = width * 0.2 * lineJitter;
+  const softSpread = lerp(spread, spread * 0.3, bandSoftening);
+  const softPhaseSpread = lerp(phaseSpread, phaseSpread * 0.3, bandSoftening);
+  const softAmpOffset = 1 + norm * softSpread;
+  const softPhaseOffset = symmetryBias * softPhaseSpread;
+  const densityCompression = lerp(1, 0.78, densityLimit);
+  const densityShape = lerp(1, 1.85, densityLimit);
 
   let d = "";
   for (let i = 0; i <= n; i += 1) {
     const t = i / n;
-    const x = padX + t * usableWidth;
+    const seamReliefEnvelope = gaussian(t, focusCenter, Math.max(0.055, focusSigma * 0.8));
+    const jitterEnvelope = 0.35 + 0.65 * Math.sin(Math.PI * t);
+    const microJitter =
+      (Math.sin(t * TAU * 1.7 + jitterNoise * TAU) * 0.55 +
+        Math.sin(t * TAU * 3.1 + jitterNoiseB * TAU) * 0.45) *
+      lineJitterPx *
+      jitterEnvelope;
+    const x =
+      padX +
+      t * usableWidth +
+      lineNoise * seamReliefStrength * seamReliefEnvelope +
+      microJitter;
     const u = t * TAU;
     const mirroredT = 1 - Math.abs(2 * t - 1);
     const structuralT = lerp(t, mirroredT, symmetry);
-    const focusBoost = 1 + focalCompression * gaussian(t, focusCenter, focusSigma) * 1.25;
+    const softenedCompression = lerp(focalCompression, focalCompression * 0.55, bandSoftening);
+    const focusBoost = 1 + softenedCompression * gaussian(t, focusCenter, focusSigma) * 1.25;
     let yNorm = 0;
 
     if (mode === "decay") {
       const biasedT = clamp(t + Math.max(0, directionBias) * 0.22, 0, 1);
       const env = Math.exp(-damping * biasedT);
-      const w1 = Math.sin(frequency * u + phaseOffset);
-      const w2 = secondaryMix * Math.sin(secondaryFrequency * u + secondaryPhase + phaseOffset * 0.6);
-      yNorm = (w1 + w2) * env * ampOffset * lerp(1, focusBoost, 0.35);
+      const w1 = Math.sin(frequency * u + softPhaseOffset);
+      const w2 = secondaryMix * Math.sin(secondaryFrequency * u + secondaryPhase + softPhaseOffset * 0.6);
+      yNorm = (w1 + w2) * env * softAmpOffset * lerp(1, focusBoost, 0.35);
     } else if (mode === "standing") {
       const envelope = lerp(Math.sin(Math.PI * t), Math.sin(Math.PI * structuralT), symmetry);
-      const carrier = Math.sin(frequency * Math.PI * structuralT + phaseOffset);
-      const shimmer = secondaryMix * 0.3 * Math.sin(secondaryFrequency * Math.PI * structuralT + secondaryPhase + phaseOffset);
-      yNorm = envelope * (carrier + shimmer) * ampOffset * lerp(1, focusBoost, 0.45);
+      const carrier = Math.sin(frequency * Math.PI * structuralT + softPhaseOffset);
+      const shimmer = secondaryMix * 0.3 * Math.sin(secondaryFrequency * Math.PI * structuralT + secondaryPhase + softPhaseOffset);
+      yNorm = envelope * (carrier + shimmer) * softAmpOffset * lerp(1, focusBoost, 0.45);
     } else if (mode === "interference") {
-      const w1 = Math.sin(frequency * u + phaseOffset);
-      const w2 = secondaryMix * Math.sin(secondaryFrequency * u + secondaryPhase - phaseOffset * 0.8);
-      yNorm = (w1 + w2) * 0.5 * ampOffset * focusBoost;
+      const w1 = Math.sin(frequency * u + softPhaseOffset);
+      const w2 = secondaryMix * Math.sin(secondaryFrequency * u + secondaryPhase - softPhaseOffset * 0.8);
+      yNorm = (w1 + w2) * 0.5 * softAmpOffset * focusBoost;
     } else if (mode === "resonance") {
       const env =
         0.18 +
         0.45 * gaussian(t, 0.25 + directionBias * 0.04, 0.09) +
         1.1 * gaussian(t, 0.55 + directionBias * 0.08, lerp(0.09, 0.05, focalCompression)) +
         0.75 * gaussian(t, 0.73 + directionBias * 0.05, 0.06);
-      const w1 = Math.sin(frequency * u + phaseOffset);
-      const w2 = secondaryMix * Math.sin(secondaryFrequency * u + secondaryPhase + phaseOffset * 0.4);
-      yNorm = (w1 + w2) * env * ampOffset * lerp(1, focusBoost, 0.5);
+      const w1 = Math.sin(frequency * u + softPhaseOffset);
+      const w2 = secondaryMix * Math.sin(secondaryFrequency * u + secondaryPhase + softPhaseOffset * 0.4);
+      yNorm = (w1 + w2) * env * softAmpOffset * lerp(1, focusBoost, 0.5);
     } else if (mode === "orbital") {
-      const orbit = Math.sin(u * frequency * 0.5 + phaseOffset);
+      const orbit = Math.sin(u * frequency * 0.5 + softPhaseOffset);
       const fold = Math.sin(u * secondaryFrequency * 0.25 + secondaryPhase);
-      const ribbon = Math.sin(u * frequency + phaseOffset) * 0.45;
-      yNorm = (orbit * fold + ribbon * secondaryMix) * ampOffset * lerp(1, focusBoost, 0.4);
+      const ribbon = Math.sin(u * frequency + softPhaseOffset) * 0.45;
+      yNorm = (orbit * fold + ribbon * secondaryMix) * softAmpOffset * lerp(1, focusBoost, 0.4);
     }
 
     const y = centerY - yNorm * ampPx;
@@ -365,7 +414,7 @@ function buildOrbitalPath(settings, lineIndex, width, height) {
     frequency, amplitude, lineCount, spread, phaseSpread,
     secondaryMix, secondaryFrequency, secondaryPhase,
     symmetry, directionBias, focalCompression,
-    scale, yOffset,
+    scale, yOffset, lineJitter = 0, bandSoftening = 0,
   } = settings;
 
   const cx = width / 2 + directionBias * width * 0.08;
@@ -374,23 +423,40 @@ function buildOrbitalPath(settings, lineIndex, width, height) {
   const ry = height * 0.21 * scale;
   const mid = (lineCount - 1) / 2;
   const norm = lineCount <= 1 ? 0 : (lineIndex - mid) / mid;
-  const phaseOffset = norm * phaseSpread;
-  const sizeOffset = 1 + norm * spread * 0.6;
-  const tension = 1 + focalCompression * 0.35;
+  const softenedSpread = lerp(spread, spread * 0.45, bandSoftening);
+  const softenedPhaseSpread = lerp(phaseSpread, phaseSpread * 0.5, bandSoftening);
+  const phaseOffset = norm * softenedPhaseSpread;
+  const sizeOffset = 1 + norm * softenedSpread * 0.6;
+  const tension = 1 + lerp(focalCompression, focalCompression * 0.6, bandSoftening) * 0.35;
+  const lineNoise = hashNoise(lineIndex + 1) - 0.5;
+  const jitterNoise = hashNoise((lineIndex + 1) * 1.93) - 0.5;
+  const orbitJitter = Math.min(width, height) * 0.02 * lineJitter;
 
   let d = "";
   const steps = 900;
   for (let i = 0; i <= steps; i += 1) {
     const t = (i / steps) * TAU;
     const symmetryFold = lerp(1, Math.cos(t * 2), symmetry * 0.25);
+    const jitterX =
+      (Math.sin(t * 2.3 + jitterNoise * TAU) * 0.6 +
+        Math.cos(t * 4.1 + lineNoise * TAU) * 0.4) *
+      orbitJitter;
+
+    const jitterY =
+      (Math.cos(t * 2.0 + jitterNoise * TAU) * 0.6 +
+        Math.sin(t * 3.6 + lineNoise * TAU) * 0.4) *
+      orbitJitter;
+
     const x =
       cx +
       rx * sizeOffset * Math.sin(t) +
-      rx * 0.35 * secondaryMix * Math.sin(secondaryFrequency * t + secondaryPhase + phaseOffset);
+      rx * 0.35 * secondaryMix * Math.sin(secondaryFrequency * t + secondaryPhase + phaseOffset) +
+      jitterX;
     const y =
       cy +
       ry * sizeOffset * Math.sin(frequency * t + phaseOffset) * amplitude * tension +
-      ry * 0.28 * Math.cos(t * (1.4 + symmetry * 0.6) + phaseOffset * 0.4) * symmetryFold;
+      ry * 0.28 * Math.cos(t * (1.4 + symmetry * 0.6) + phaseOffset * 0.4) * symmetryFold +
+      jitterY;
     d += i === 0 ? `M ${x.toFixed(2)} ${y.toFixed(2)}` : ` L ${x.toFixed(2)} ${y.toFixed(2)}`;
   }
   return d;
@@ -454,6 +520,13 @@ function HarmonicSvg({ settings }) {
     const list = [];
     const totalLines = settings.mode === "vortex" ? settings.radialLineCount : settings.lineCount;
     for (let i = 0; i < totalLines; i += 1) {
+      if (settings.mode !== "vortex" && settings.densityLimit > 0) {
+        const mid = (totalLines - 1) / 2;
+        const norm = totalLines <= 1 ? 0 : Math.abs((i - mid) / Math.max(1, mid));
+        const keepStride = Math.max(1, Math.round(lerp(1, 3, settings.densityLimit * norm)));
+        if (i % keepStride !== 0) continue;
+      }
+
       let d;
       if (settings.mode === "orbital") {
         d = buildOrbitalPath(settings, i, width, height);
@@ -477,6 +550,7 @@ function HarmonicSvg({ settings }) {
       xmlns="http://www.w3.org/2000/svg"
       role="img"
       aria-label="Harmonic poster preview"
+      shapeRendering="geometricPrecision"
     >
       <rect x="0" y="0" width={width} height={height} fill="#000000" />
       {settings.axisLine && settings.mode !== "vortex" && (
@@ -503,14 +577,22 @@ function HarmonicSvg({ settings }) {
   );
 }
 
-function Control({ label, value, min, max, step = 0.01, onChange }) {
+function Control({ label, value = 0, min, max, step = 0.01, onChange }) {
+  const safeValue = Number.isFinite(value) ? value : 0;
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between text-sm text-zinc-300">
         <Label>{label}</Label>
-        <span className="tabular-nums text-zinc-500">{value.toFixed(2)}</span>
+        <span className="tabular-nums text-zinc-500">{safeValue.toFixed(2)}</span>
       </div>
-      <Slider value={[value]} min={min} max={max} step={step} onValueChange={(v) => onChange(v[0])} />
+      <Slider
+        value={[safeValue]}
+        min={min}
+        max={max}
+        step={step}
+        onValueChange={(v) => onChange(v[0])}
+      />
     </div>
   );
 }
@@ -575,6 +657,21 @@ export default function App() {
         ...prev,
         mode,
         xPadding: prev.xPadding ?? PRESETS[mode].xPadding,
+    lineJitter: 0.06,
+    bandSoftening: 0.22,
+    densityLimit: 0.18,
+    lineJitter: 0.06,
+    bandSoftening: 0.22,
+    densityLimit: 0.18,
+    lineJitter: 0.06,
+    bandSoftening: 0.22,
+    densityLimit: 0.18,
+    lineJitter: 0.06,
+    bandSoftening: 0.22,
+    densityLimit: 0.18,
+    lineJitter: 0.06,
+    bandSoftening: 0.22,
+    densityLimit: 0.18,
       };
     });
   };
@@ -884,6 +981,9 @@ export default function App() {
               <Control label="Line Count" value={settings.lineCount} min={6} max={60} step={1} onChange={(v) => update("lineCount", Math.round(v))} />
               <Control label="Line Spread" value={settings.spread} min={0} max={0.5} step={0.01} onChange={(v) => update("spread", v)} />
               <Control label="Phase Spread" value={settings.phaseSpread} min={0} max={3} step={0.01} onChange={(v) => update("phaseSpread", v)} />
+              <Control label="Line Jitter" value={settings.lineJitter} min={0} max={0.45} step={0.01} onChange={(v) => update("lineJitter", v)} />
+              <Control label="Band Softening" value={settings.bandSoftening} min={0} max={1} step={0.01} onChange={(v) => update("bandSoftening", v)} />
+              <Control label="Density Limit" value={settings.densityLimit} min={0} max={1} step={0.01} onChange={(v) => update("densityLimit", v)} />
               <Control label="Stroke Weight" value={settings.thickness} min={0.4} max={2.2} step={0.01} onChange={(v) => update("thickness", v)} />
               <Control label="Opacity" value={settings.opacity} min={0.1} max={1} step={0.01} onChange={(v) => update("opacity", v)} />
             </Section>
