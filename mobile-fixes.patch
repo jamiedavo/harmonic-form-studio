@@ -1,0 +1,497 @@
+diff --git a/index.html b/index.html
+index 64e9110..c32b9b9 100644
+--- a/index.html
++++ b/index.html
+@@ -1,9 +1,10 @@
+ <!doctype html>
+-<html lang="en">
++<html lang="en" class="dark">
+   <head>
+     <meta charset="UTF-8" />
+     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
++    <meta name="theme-color" content="#09090b" />
+     <title>harmonic-form-studio</title>
+   </head>
+   <body>
+diff --git a/src/App.jsx b/src/App.jsx
+index 5b6e6bd..4d69802 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -831,8 +831,8 @@ function HarmonicSvg({
+     <svg
+       id="harmonic-poster-svg"
+       viewBox={`0 0 ${width} ${height}`}
+-      className="w-full h-auto rounded-3xl shadow-2xl transition-colors duration-300"
+-      style={{ backgroundColor: palette.bg }}
++      className="mx-auto block h-auto max-h-[36dvh] w-full max-w-full rounded-2xl shadow-2xl transition-colors duration-300 lg:max-h-none lg:rounded-3xl"
++      style={{ backgroundColor: palette.bg, "--hf-sw": settings.thickness * (width / 500), "--hf-fs": width / 36 }}
+       xmlns="http://www.w3.org/2000/svg"
+       role="img"
+       aria-label="Harmonic form generative art canvas"
+@@ -863,6 +863,7 @@ function HarmonicSvg({
+             )}
+             {/* Visual Stroke Line */}
+             <path
++              className="hf-curve"
+               d={curve.strokePath}
+               fill="none"
+               stroke={palette.stroke}
+@@ -878,6 +879,7 @@ function HarmonicSvg({
+       {/* Swiss Archival Poster Typography Framing */}
+       {posterFrame && (
+         <g
++          className="hf-frame"
+           fontFamily="system-ui, -apple-system, sans-serif"
+           fill={palette.textMuted}
+           style={{ letterSpacing: "0.15em", textTransform: "uppercase" }}
+@@ -907,18 +909,18 @@ function HarmonicSvg({
+           <text x="44" y="48" fontWeight="600" fill={palette.accent}>
+             STUDIO SERIES // {settings.mode.toUpperCase()}
+           </text>
+-          <text x={width - 44} y="48" textAnchor="end">
++          <text className="hf-formula" x={width - 44} y="48" textAnchor="end">
+             {formulaLabel}
+           </text>
+ 
+           {/* Footer Metadata */}
+-          <text x="44" y={height - 42}>
++          <text className="hf-foot-side" x="44" y={height - 42}>
+             HARMONIC FORM STUDIO · ED. 2026
+           </text>
+           <text x={width / 2} y={height - 42} textAnchor="middle" fill={palette.stroke} fillOpacity="0.7">
+             PLATE № {(Math.abs(settings.frequency * 73) % 900 + 100).toFixed(0)} / {palette.name}
+           </text>
+-          <text x={width - 44} y={height - 42} textAnchor="end">
++          <text className="hf-foot-side" x={width - 44} y={height - 42} textAnchor="end">
+             VECTOR HARMONIC PLOT
+           </text>
+         </g>
+@@ -927,6 +929,34 @@ function HarmonicSvg({
+   );
+ }
+ 
++// Owns the per-frame time state so the 60fps loop only re-renders the SVG,
++// not the whole app (all the sliders/selects). Pauses when the tab is hidden
++// and honours prefers-reduced-motion. Runs at 30fps on touch devices.
++function AnimatedHarmonicSvg({ isPlaying, animSpeed, ...props }) {
++  const [timeOffset, setTimeOffset] = useState(0);
++
++
++  useEffect(() => {
++    if (!isPlaying) return undefined;
++    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return undefined;
++
++    const minFrame = window.matchMedia?.("(pointer: coarse)").matches ? 1000 / 30 : 0;
++    let raf;
++    let last = performance.now();
++    const frame = (now) => {
++      raf = requestAnimationFrame(frame);
++      if (document.hidden || now - last < minFrame) return;
++      const dt = Math.min((now - last) / 1000, 0.1);
++      last = now;
++      setTimeOffset((prev) => (prev + dt * animSpeed * 1.5) % TAU);
++    };
++    raf = requestAnimationFrame(frame);
++    return () => cancelAnimationFrame(raf);
++  }, [isPlaying, animSpeed]);
++
++  return <HarmonicSvg {...props} timeOffset={timeOffset} />;
++}
++
+ // ==========================================
+ // REUSABLE UI CONTROLS
+ // ==========================================
+@@ -951,7 +981,7 @@ function Control({ label, value = 0, min, max, step = 0.01, onChange }) {
+ 
+ function Section({ title, description, children }) {
+   return (
+-    <div className="grid gap-4 rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-4 shadow-sm">
++    <div className="grid gap-4 rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-3 shadow-sm sm:p-4">
+       <div className="space-y-1">
+         <div className="text-sm font-medium text-zinc-100">{title}</div>
+         {description && <p className="text-xs leading-relaxed text-zinc-500">{description}</p>}
+@@ -976,7 +1006,6 @@ export default function App() {
+   const [isPlaying, setIsPlaying] = useState(false);
+   const [animSpeed, setAnimSpeed] = useState(1.0);
+   const [isAudifying, setIsAudifying] = useState(false);
+-  const [timeOffset, setTimeOffset] = useState(0);
+ 
+   const [variationAmount, setVariationAmount] = useState(0.24);
+   const [showAdvanced, setShowAdvanced] = useState(false);
+@@ -989,28 +1018,6 @@ export default function App() {
+ 
+   const update = (key, value) => setSettings((prev) => ({ ...prev, [key]: value }));
+ 
+-  // Animation loop
+-  const animRef = useRef(null);
+-  useEffect(() => {
+-    if (!isPlaying) {
+-      if (animRef.current) cancelAnimationFrame(animRef.current);
+-      return;
+-    }
+-
+-    let lastTime = performance.now();
+-    const frame = (now) => {
+-      const dt = (now - lastTime) / 1000;
+-      lastTime = now;
+-      setTimeOffset((prev) => (prev + dt * animSpeed * 1.5) % TAU);
+-      animRef.current = requestAnimationFrame(frame);
+-    };
+-
+-    animRef.current = requestAnimationFrame(frame);
+-    return () => {
+-      if (animRef.current) cancelAnimationFrame(animRef.current);
+-    };
+-  }, [isPlaying, animSpeed]);
+-
+   const audioTimeoutRef = useRef(null);
+ 
+   // Audio Playback
+@@ -1076,11 +1083,20 @@ export default function App() {
+   };
+ 
+   // URL Hash Permalinks
+-  const shareUrl = () => {
++  const shareUrl = async () => {
+     const payload = { s: settings, p: activePaletteKey, a: aspectRatio, f: posterFrame };
+     const encoded = encodeURIComponent(btoa(JSON.stringify(payload)));
+     window.location.hash = `share=${encoded}`;
+-    navigator.clipboard.writeText(window.location.href);
++    const url = window.location.href;
++    if (navigator.share) {
++      try {
++        await navigator.share({ title: "Harmonic Form Studio", url });
++        return;
++      } catch (err) {
++        if (err?.name === "AbortError") return;
++      }
++    }
++    try { await navigator.clipboard.writeText(url); } catch { /* ignore */ }
+     setCopyFeedback(true);
+     setTimeout(() => setCopyFeedback(false), 2000);
+   };
+@@ -1190,60 +1206,101 @@ export default function App() {
+ 
+   const [currentTitle, currentSubtitle] = titles[settings.mode] || ["Harmonic Study", "Mathematical Form"];
+ 
++  const renderPlateInfo = (cls) => (
++              <div className={`flex flex-col justify-between gap-3 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4 sm:flex-row sm:items-center ${cls}`}>
++                <div>
++                  <div className="text-[11px] font-medium uppercase tracking-widest text-zinc-500">
++                    Live Harmonic Study // {settings.mode}
++                  </div>
++                  <div className="text-xl font-medium text-zinc-100">{currentTitle}</div>
++                  <div className="text-xs text-zinc-400">{currentSubtitle}</div>
++                </div>
++
++                <div className="flex items-center gap-2">
++                  <Button
++                    variant="outline"
++                    size="sm"
++                    className="rounded-xl border-zinc-800 text-xs"
++                    onClick={saveCustomPreset}
++                  >
++                    Save Preset
++                  </Button>
++                  <Button
++                    variant="outline"
++                    size="sm"
++                    className="rounded-xl border-zinc-800 text-xs"
++                    onClick={copyPresetJson}
++                  >
++                    <Copy className="size-3.5 mr-1" />
++                    {copyFeedback ? "Copied" : "JSON"}
++                  </Button>
++                  <Button
++                    variant="outline"
++                    size="sm"
++                    className="rounded-xl border-zinc-800 text-xs"
++                    onClick={() => applyPreset(preset)}
++                  >
++                    <RefreshCw className="size-3.5 mr-1" /> Reset
++                  </Button>
++                </div>
++              </div>
++  );
++
+   return (
+-    <div className="min-h-screen bg-zinc-950 text-zinc-100 selection:bg-zinc-800">
++    <div className="min-h-dvh bg-zinc-950 text-zinc-100 selection:bg-zinc-800">
+       {/* Navigation Topbar */}
+-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-zinc-800/80 bg-zinc-950/80 px-6 backdrop-blur">
+-        <div className="flex items-center gap-3">
+-          <div className="size-3.5 rounded-full bg-zinc-100 ring-4 ring-zinc-700/30" />
+-          <span className="text-sm font-semibold tracking-wider uppercase text-zinc-100">
+-            Harmonic Form Studio
++      <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-zinc-800/80 bg-zinc-950/90 px-3 pt-[env(safe-area-inset-top)] backdrop-blur sm:px-6">
++        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
++          <div className="size-3.5 shrink-0 rounded-full bg-zinc-100 ring-4 ring-zinc-700/30" />
++          <span className="truncate text-xs font-semibold tracking-wider uppercase text-zinc-100 sm:text-sm">
++            <span className="sm:hidden">Harmonic Form</span>
++            <span className="hidden sm:inline">Harmonic Form Studio</span>
+           </span>
+           <span className="hidden rounded-full border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[10px] uppercase tracking-widest text-zinc-400 sm:inline-block">
+             Archival v2.5
+           </span>
+         </div>
+ 
+-        <div className="flex items-center gap-2">
++        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+           {/* Audify Synth Button */}
+           <Button
+             size="sm"
+             variant={isAudifying ? "default" : "outline"}
+-            className="rounded-xl border-zinc-800 text-xs"
++            className="h-9 rounded-xl border-zinc-800 px-2.5 text-xs sm:h-8 sm:px-3"
+             onClick={toggleAudify}
+             title="Listen to this equation via Web Audio synthesis"
+           >
+-            {isAudifying ? <VolumeX className="size-3.5 mr-1 text-red-400" /> : <Volume2 className="size-3.5 mr-1" />}
+-            {isAudifying ? "Mute" : "Audify"}
++            {isAudifying ? <VolumeX className="size-4 sm:size-3.5 sm:mr-1 text-red-400" /> : <Volume2 className="size-4 sm:size-3.5 sm:mr-1" />}
++            <span className="hidden sm:inline">{isAudifying ? "Mute" : "Audify"}</span>
+           </Button>
+ 
+           {/* Kinetic Animation Toggle */}
+           <Button
+             size="sm"
+             variant={isPlaying ? "default" : "outline"}
+-            className="rounded-xl border-zinc-800 text-xs"
++            className="h-9 rounded-xl border-zinc-800 px-2.5 text-xs sm:h-8 sm:px-3"
+             onClick={() => setIsPlaying(!isPlaying)}
+           >
+-            {isPlaying ? <Pause className="size-3.5 mr-1 text-amber-400" /> : <Play className="size-3.5 mr-1" />}
+-            {isPlaying ? "Pause" : "Animate"}
++            {isPlaying ? <Pause className="size-4 sm:size-3.5 sm:mr-1 text-amber-400" /> : <Play className="size-4 sm:size-3.5 sm:mr-1" />}
++            <span className="hidden sm:inline">{isPlaying ? "Pause" : "Animate"}</span>
+           </Button>
+ 
+           {/* Share URL */}
+           <Button
+             size="sm"
+             variant="outline"
+-            className="rounded-xl border-zinc-800 text-xs"
++            className="h-9 rounded-xl border-zinc-800 px-2.5 text-xs sm:h-8 sm:px-3"
+             onClick={shareUrl}
+           >
+-            <Share2 className="size-3.5 mr-1" />
+-            {copyFeedback ? "Link Copied!" : "Share"}
++            <Share2 className="size-4 sm:size-3.5 sm:mr-1" />
++            <span className="hidden sm:inline">{copyFeedback ? "Link Copied!" : "Share"}</span>
+           </Button>
+         </div>
+       </header>
+ 
+       {/* Main Workspace Layout */}
+-      <main className="mx-auto max-w-7xl p-4 lg:p-6">
+-        <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
++      <main className="mx-auto max-w-7xl p-3 pb-[max(1rem,env(safe-area-inset-bottom))] lg:p-6">
++        <div className="grid gap-4 lg:grid-cols-[380px_1fr] lg:gap-6">
+           {/* Controls Sidebar */}
+           <div className="space-y-5 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1">
+             <Card className="border-zinc-800/90 bg-zinc-900/60 shadow-xl backdrop-blur">
+@@ -1335,7 +1392,7 @@ export default function App() {
+                     </Select>
+                   </div>
+ 
+-                  <div className="grid grid-cols-2 gap-3 pt-1">
++                  <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
+                     <div className="space-y-1.5">
+                       <Label>Aspect Ratio</Label>
+                       <Select value={aspectRatio} onValueChange={setAspectRatio}>
+@@ -1465,60 +1522,27 @@ export default function App() {
+                 </Section>
+               </CardContent>
+             </Card>
++            {renderPlateInfo("lg:hidden")}
+           </div>
+ 
+           {/* Visual Artwork Preview Panel */}
+-          <div className="space-y-5">
+-            <div className="sticky top-20 space-y-4">
++          {/* On phones this cell is itself sticky and sits above the controls, so
++              the artwork stays on screen while you drag sliders. */}
++          <div className="sticky top-14 z-20 order-first -mx-3 space-y-5 border-b border-zinc-800/80 bg-zinc-950/95 px-3 py-2 backdrop-blur lg:static lg:order-none lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
++            <div className="space-y-4 lg:sticky lg:top-20">
+               {/* Art Canvas Container */}
+-              <div className="relative overflow-hidden rounded-[2rem] border border-zinc-800/80 bg-zinc-900/30 p-3 lg:p-5 shadow-2xl backdrop-blur">
+-                <HarmonicSvg
++              <div className="relative overflow-hidden rounded-2xl border border-zinc-800/80 bg-zinc-900/30 p-1.5 lg:rounded-[2rem] lg:p-5 lg:shadow-2xl lg:backdrop-blur">
++                <AnimatedHarmonicSvg
++                  isPlaying={isPlaying}
++                  animSpeed={animSpeed}
+                   settings={settings}
+                   palette={activePalette}
+                   aspectRatio={aspectRatio}
+                   posterFrame={posterFrame}
+-                  timeOffset={timeOffset}
+                 />
+               </div>
+ 
+-              {/* Plate Information Card */}
+-              <div className="flex flex-col justify-between gap-3 rounded-2xl border border-zinc-800/80 bg-zinc-900/40 p-4 sm:flex-row sm:items-center">
+-                <div>
+-                  <div className="text-[11px] font-medium uppercase tracking-widest text-zinc-500">
+-                    Live Harmonic Study // {settings.mode}
+-                  </div>
+-                  <div className="text-xl font-medium text-zinc-100">{currentTitle}</div>
+-                  <div className="text-xs text-zinc-400">{currentSubtitle}</div>
+-                </div>
+-
+-                <div className="flex items-center gap-2">
+-                  <Button
+-                    variant="outline"
+-                    size="sm"
+-                    className="rounded-xl border-zinc-800 text-xs"
+-                    onClick={saveCustomPreset}
+-                  >
+-                    Save Preset
+-                  </Button>
+-                  <Button
+-                    variant="outline"
+-                    size="sm"
+-                    className="rounded-xl border-zinc-800 text-xs"
+-                    onClick={copyPresetJson}
+-                  >
+-                    <Copy className="size-3.5 mr-1" />
+-                    {copyFeedback ? "Copied" : "JSON"}
+-                  </Button>
+-                  <Button
+-                    variant="outline"
+-                    size="sm"
+-                    className="rounded-xl border-zinc-800 text-xs"
+-                    onClick={() => applyPreset(preset)}
+-                  >
+-                    <RefreshCw className="size-3.5 mr-1" /> Reset
+-                  </Button>
+-                </div>
+-              </div>
++              {renderPlateInfo("hidden lg:flex")}
+             </div>
+           </div>
+         </div>
+diff --git a/src/components/ui/select.jsx b/src/components/ui/select.jsx
+index 12dae73..1d15e29 100644
+--- a/src/components/ui/select.jsx
++++ b/src/components/ui/select.jsx
+@@ -66,7 +66,7 @@ function SelectContent({
+         data-slot="select-content"
+         data-align-trigger={position === "item-aligned"}
+         className={cn(
+-          "relative z-50 max-h-(--radix-select-content-available-height) min-w-36 origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
++          "relative z-50 max-h-(--radix-select-content-available-height) min-w-36 origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+           position ==="popper"&&"data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
+           className
+         )}
+diff --git a/src/components/ui/slider.jsx b/src/components/ui/slider.jsx
+index 898023f..bf98e0f 100644
+--- a/src/components/ui/slider.jsx
++++ b/src/components/ui/slider.jsx
+@@ -26,22 +26,22 @@ function Slider({
+       min={min}
+       max={max}
+       className={cn(
+-        "relative flex w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:min-h-40 data-vertical:w-auto data-vertical:flex-col",
++        "relative flex w-full touch-pan-y items-center py-2 lg:py-0 select-none data-disabled:opacity-50 data-[orientation=vertical]:h-full data-[orientation=vertical]:min-h-40 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col",
+         className
+       )}
+       {...props}>
+       <SliderPrimitive.Track
+         data-slot="slider-track"
+-        className="relative grow overflow-hidden rounded-full bg-muted data-horizontal:h-1 data-horizontal:w-full data-vertical:h-full data-vertical:w-1">
++        className="relative grow overflow-hidden rounded-full bg-muted data-[orientation=horizontal]:h-1.5 lg:data-[orientation=horizontal]:h-1 data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1">
+         <SliderPrimitive.Range
+           data-slot="slider-range"
+-          className="absolute bg-primary select-none data-horizontal:h-full data-vertical:w-full" />
++          className="absolute bg-primary select-none data-[orientation=horizontal]:h-full data-[orientation=vertical]:w-full" />
+       </SliderPrimitive.Track>
+       {Array.from({ length: _values.length }, (_, index) => (
+         <SliderPrimitive.Thumb
+           data-slot="slider-thumb"
+           key={index}
+-          className="relative block size-3 shrink-0 rounded-full border border-ring bg-white ring-ring/50 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3 disabled:pointer-events-none disabled:opacity-50" />
++          className="relative block size-6 lg:size-3 shrink-0 rounded-full border border-ring bg-white ring-ring/50 transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-3 focus-visible:ring-3 focus-visible:outline-hidden active:ring-3 disabled:pointer-events-none disabled:opacity-50" />
+       ))}
+     </SliderPrimitive.Root>
+   );
+diff --git a/src/components/ui/switch.jsx b/src/components/ui/switch.jsx
+index 2d3255b..392a147 100644
+--- a/src/components/ui/switch.jsx
++++ b/src/components/ui/switch.jsx
+@@ -15,13 +15,13 @@ function Switch({
+       data-slot="switch"
+       data-size={size}
+       className={cn(
+-        "peer group/switch relative inline-flex shrink-0 items-center rounded-full border border-transparent transition-all outline-none after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-[size=default]:h-[18.4px] data-[size=default]:w-[32px] data-[size=sm]:h-[14px] data-[size=sm]:w-[24px] dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:bg-primary data-unchecked:bg-input dark:data-unchecked:bg-input/80 data-disabled:cursor-not-allowed data-disabled:opacity-50",
++        "peer group/switch relative inline-flex shrink-0 items-center rounded-full border border-transparent transition-all outline-none after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-[size=default]:h-[18.4px] data-[size=default]:w-[32px] data-[size=sm]:h-[14px] data-[size=sm]:w-[24px] dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input dark:data-[state=unchecked]:bg-input/80 data-disabled:cursor-not-allowed data-disabled:opacity-50",
+         className
+       )}
+       {...props}>
+       <SwitchPrimitive.Thumb
+         data-slot="switch-thumb"
+-        className="pointer-events-none block rounded-full bg-background ring-0 transition-transform group-data-[size=default]/switch:size-4 group-data-[size=sm]/switch:size-3 group-data-[size=default]/switch:data-checked:translate-x-[calc(100%-2px)] group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-2px)] dark:data-checked:bg-primary-foreground group-data-[size=default]/switch:data-unchecked:translate-x-0 group-data-[size=sm]/switch:data-unchecked:translate-x-0 dark:data-unchecked:bg-foreground" />
++        className="pointer-events-none block rounded-full bg-background ring-0 transition-transform group-data-[size=default]/switch:size-4 group-data-[size=sm]/switch:size-3 group-data-[size=default]/switch:data-[state=checked]:translate-x-[calc(100%-2px)] group-data-[size=sm]/switch:data-[state=checked]:translate-x-[calc(100%-2px)] dark:data-[state=checked]:bg-primary-foreground group-data-[size=default]/switch:data-[state=unchecked]:translate-x-0 group-data-[size=sm]/switch:data-[state=unchecked]:translate-x-0 dark:data-[state=unchecked]:bg-foreground" />
+     </SwitchPrimitive.Root>
+   );
+ }
+diff --git a/src/index.css b/src/index.css
+index 86e7995..259be16 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -1,5 +1,8 @@
+ @import "tailwindcss";
+ 
++/* App is dark-only: make shadcn `dark:` variants follow the class, not the OS setting */
++@custom-variant dark (&:where(.dark, .dark *));
++
+ @theme {
+   --color-background: hsl(240 10% 3.9%);
+   --color-foreground: hsl(0 0% 98%);
+@@ -34,12 +37,39 @@
+   }
+ }
+ 
+-html, body, #root {
+-  height: 100%;
++/* Let the document itself scroll (not #root) so mobile browser chrome can
++   collapse, sticky positioning works, and there is no nested scroll area. */
++html, body {
+   margin: 0;
+   padding: 0;
+   background-color: #09090b;
+   color: #fafafa;
+-  overflow-x: hidden;
+-  overflow-y: auto;
+-}
+\ No newline at end of file
++  color-scheme: dark;
++  -webkit-text-size-adjust: 100%;
++}
++
++/* `clip` (not `hidden`) so html/body don't become scroll containers,
++   which would silently break position: sticky. */
++html {
++  overflow-x: clip;
++}
++
++#root {
++  min-height: 100dvh;
++}
++
++
++/* ---- Small-screen preview tuning (on-screen only; exports are unaffected
++   because the serializer only writes attributes, not CSS) ---- */
++@media (max-width: 1023px) {
++  #harmonic-poster-svg .hf-curve {
++    stroke-width: calc(var(--hf-sw) * 1px);
++  }
++  #harmonic-poster-svg .hf-frame text {
++    font-size: calc(var(--hf-fs) * 1px);
++  }
++  #harmonic-poster-svg .hf-formula,
++  #harmonic-poster-svg .hf-foot-side {
++    display: none;
++  }
++}
